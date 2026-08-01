@@ -2,9 +2,10 @@
 
 *Baggage claim, but it's a puzzle.*
 
-**One-liner:** Bags loop endlessly around an airport carousel. You have seven slots
-on your claim tray. Tap three matching bags to send a traveler home. Fill the tray
-with no match and you're jammed.
+**One-liner:** Bags loop endlessly around an airport carousel. You can only grab
+the ones passing through the lit zone in front of you, and your claim tray holds
+seven. Three matching bags send a traveler home. Jam the tray, or miss the flight,
+and the run is over.
 
 ---
 
@@ -24,12 +25,16 @@ control. It ships with built-in tension (that bag is going away), built-in relie
 
 1. **One verb.** Tap a bag. That's the entire input. No dragging, no aiming, no
    two-finger anything. Playable one-thumbed on a train.
-2. **The loop forgives.** Unlike triple-match games, a bag you skip is never lost —
-   it comes back around. Wrong taps cost you *time and tray space*, never the run.
-   This is the addictiveness lever: the failure state is always self-inflicted and
-   always recoverable-looking, which is exactly what keeps people tapping "Retry."
-3. **Readable at a glance.** Colored tile + silhouette. You can tell what a bag is
-   at 20% screen height, in sunlight, at 30fps.
+2. **The belt is the constraint.** You can only claim from a lit zone at the bottom
+   of the loop — roughly a fifth of it. Everything else is visible but out of reach.
+   So every bag that enters the zone is a decision: take it now, or wait a full lap.
+   That decision, made 60 times a minute, *is* the game.
+3. **The loop forgives, but it charges.** A bag you skip is never lost — it comes
+   back. Wrong taps cost time and tray space, never an instant dead end. That keeps
+   the failure state feeling self-inflicted and recoverable, which is what keeps
+   people tapping "Retry" — while the clock stops "wait for perfect" from being free.
+4. **Readable at a glance.** Colored tile + motif. You can tell what a bag is at 20%
+   screen height, in sunlight, at 30fps — and without relying on hue alone.
 
 ### What makes it different from triple-match
 
@@ -38,11 +43,28 @@ punishes you for a misclick permanently. Its ads are great and its D7 is bad,
 because the frustration is *terminal* — you fail from a mistake you made 90 seconds
 ago and can't see anymore.
 
-Carousel takes the same tray-of-seven grammar and replaces the pile with a
-**moving queue you're allowed to wait on**. The skill isn't "spot the item," it's
-"decide whether to take this one now or on the next lap." That's a genuine
-decision, made 60 times a minute, and it's the reason there's a skill ceiling
-worth chasing a leaderboard over.
+Carousel keeps the tray-of-seven grammar and replaces the pile with a **moving
+queue you're allowed to wait on, at a price**. The skill isn't "spot the item," it's
+"decide whether to take this one now or on the next lap." That's a genuine decision
+with a real cost on both sides, and it's the reason there's a skill ceiling worth
+chasing a leaderboard over.
+
+### The trap this design has to avoid
+
+The first build of the prototype let you tap *any* bag anywhere on the belt. It
+played terribly, and it's worth writing down why, because the failure isn't obvious
+until you hold it: with free choice over every bag, there is no decision to get
+wrong. You simply never make a bad pick. The belt becomes decoration.
+
+The arithmetic is worse than that. You can hold at most two unmatched bags of each
+type before the third pops, so with `T` types in play the most you can ever be
+holding is `2T` slots. With a seven-slot tray and three types, that's six — **the
+level cannot be lost in any order.** Any early level with fewer than four types is
+unloseable no matter what the player does.
+
+Both problems are structural, not tuning. The fixes are the claim zone (which makes
+choice scarce) and the clock (which makes waiting cost something), plus reaching
+four types by level two.
 
 ---
 
@@ -51,12 +73,14 @@ worth chasing a leaderboard over.
 | | |
 |---|---|
 | **Belt** | A closed loop carrying every bag in the level. Constant speed. |
+| **Zones** | Behind the wall: hidden. The long sides: visible, out of reach — you plan here. The lit claim zone: the only place you can take a bag. |
 | **Tray** | 7 slots at the bottom. Auto-groups matching bags side by side. |
-| **Claim** | Tap a bag on the belt → it flies to the tray. |
+| **Claim** | Tap a bag *inside the lit zone* → it flies to the tray. |
 | **Match** | 3 identical bags in the tray → they pop, the slots free up, score. |
 | **Oversized** | Skis, surfboards, guitars take **2 slots** instead of 1. |
+| **Clock** | The flight departs. Roughly enough laps to clear the belt playing well, not enough to dither. |
 | **Win** | Belt is empty. |
-| **Lose** | Tray is full with no match available. |
+| **Lose** | Tray is full with no match available, or the flight boards. |
 | **Return** | 3 per level: send your last claimed bag back onto the belt. |
 
 Scoring is a **flow meter**, not a point total: pop within 4 seconds of your last
@@ -70,17 +94,18 @@ gives you a casual audience and a retention audience in the same build.
 
 No tutorial text. No hand pointing at the screen. The level teaches itself:
 
-- **0:00** — Belt starts with exactly 3 bags, all identical, moving slowly. There is
-  only one possible action. The player taps one. It flies to the tray with a
-  satisfying *thunk*.
+- **0:00** — Belt starts with exactly 3 bags, all identical, moving slowly. The claim
+  zone is the only lit thing on screen, so that is where the player looks and taps.
+  The bag flies to the tray with a satisfying *thunk*.
 - **0:06** — Third tap. The triple pops with a light burst and a chime pitched a
-  fifth above the taps. Now they know the rule.
-- **0:15** — Level 2: two types, 6 bags. First "which one do I want" decision.
-- **0:35** — Level 3: five types, 15 bags, faster belt. First time the tray gets to
-  5/7 and their stomach drops. First time a bag they wanted goes past — and comes
-  back. That moment is the hook; it's when the player learns the game is generous.
-- **0:55** — Level 4 introduces one oversized bag. Now the tray has a shape, not
-  just a count.
+  fifth above the taps. Now they know the rule, and they know where they can reach.
+- **0:14** — First bag drifts past the zone unclaimed. It dims. Fifteen seconds later
+  it comes back — the moment that teaches skipping is survivable but slow.
+- **0:30** — Level 2: four types, 18 bags. Four is deliberate: it is the first count
+  at which the tray can actually jam, so this is the level where losing becomes
+  possible at all.
+- **0:55** — Level 3 adds an oversized bag. Now the tray has a shape, not just a
+  count, and the take-or-wait call gets genuinely hard.
 
 The onboarding is complete and the player has never read a word.
 
@@ -94,9 +119,11 @@ A level is a **seed plus eight numbers**, so content is generated, not authored.
 ```
 Level = {
   seed,              // deterministic layout, so leaderboards and replays work
-  types,             // 3 → 10 distinct bag types in play
-  triples,           // 4 → 14 matched sets (= 12 → 42 bags)
-  beltSpeed,         // 34 → 110 px/s
+  types,             // 3 → 10 distinct bag types in play; 4+ to be losable at all
+  triples,           // 5 → 14 matched sets (= 15 → 42 bags)
+  beltSpeed,         // 68 → 155 px/s
+  gateSpan,          // 0.19 of the loop — shrink it and the game gets brutal fast
+  clock,             // laps' worth of time; the knob that punishes dithering
   traySlots,         // 7 (5 in "tight" events, 9 with a permanent upgrade)
   oversizedRate,     // 0 → 0.25
   modifiers[],       // see below
@@ -104,8 +131,13 @@ Level = {
 }
 ```
 
+`gateSpan` and `clock` are the two difficulty knobs that matter, because they are
+the only ones that constrain *choice*. Bag count and speed just change the texture.
+
 A solver runs at generation time and rejects any seed that isn't clearable with at
-least a 2-bag margin of tray space, then bins the seed by how *much* margin it had.
+least a 2-bag margin of tray space and time to spare, then bins the seed by how
+*much* margin it had. Because the claim zone makes bag **order** matter, the
+sequence around the loop is now the real content of a level, not just its contents.
 That gives you an infinite, difficulty-labeled level supply from day one and lets
 you tune the curve as a curve — not as 400 hand-built levels you can never revise.
 
