@@ -40,6 +40,7 @@
     display: flex;
     flex-direction: column;
     height: 100dvh;
+    min-height: 540px;   /* survives auto-height embeds */
     max-width: 520px;
     margin: 0 auto;
     background: var(--ink);
@@ -938,17 +939,27 @@
   // ── boot ────────────────────────────────────────────────────
   function resize() {
     const r = cv.getBoundingClientRect();
-    if (!r.width || !r.height) return;
-    W = r.width; H = r.height;
+    // Embedded hosts can measure zero before their first layout pass. Fall back
+    // to a sane board rather than leaving the game without a track to run on.
+    const prev = track ? track.total : 0;
+    W = Math.max(240, r.width || cv.clientWidth || 360);
+    H = Math.max(320, r.height || cv.clientHeight || 560);
     DPR = Math.min(window.devicePixelRatio || 1, 3);
     cv.width = Math.round(W * DPR);
     cv.height = Math.round(H * DPR);
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     layout();
+    if (prev && track.total !== prev) {          // keep the belt's spacing
+      const k = track.total / prev;
+      for (const b of S.bags) b.s = (b.s * k) % track.total;
+      S.beltPhase = (S.beltPhase * k) % track.total;
+    }
   }
 
   new ResizeObserver(resize).observe(cv);
+  addEventListener("resize", resize);
   resize();
+  requestAnimationFrame(resize);                 // re-measure after first paint
 
   // A belt idles behind the title card.
   S.bags = Array.from({ length: 14 }, (_, i) => ({
