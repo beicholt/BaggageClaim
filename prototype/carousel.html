@@ -39,8 +39,11 @@
     position: relative;
     display: flex;
     flex-direction: column;
+    /* Bounded on both ends: some hosts size their frame from content height,
+       and an unbounded viewport unit feeds back into that and runs away. */
     height: 100dvh;
-    min-height: 540px;   /* survives auto-height embeds */
+    min-height: 540px;
+    max-height: 940px;
     max-width: 520px;
     margin: 0 auto;
     background: var(--ink);
@@ -585,12 +588,25 @@
     btnSound.textContent = muted ? "✕" : "♫";
     btnSound.setAttribute("aria-label", muted ? "Unmute sound" : "Mute sound");
   });
-  btnGo.addEventListener("click", () => {
-    overlay.hidden = true;
-    if (S.phase === "won") startLevel(S.level + 1);
-    else if (S.phase === "lost") { S.score = S.levelStartScore; startLevel(S.level); }
-    else startLevel(1);
-  });
+  // Start on a tap anywhere on the card, through whichever event the host
+  // delivers first. Debounced so click-after-touchend can't double-fire.
+  let lastStart = 0;
+  function start() {
+    const now = Date.now();
+    if (now - lastStart < 400 || overlay.hidden) return;
+    lastStart = now;
+    try {
+      overlay.hidden = true;
+      if (S.phase === "won") startLevel(S.level + 1);
+      else if (S.phase === "lost") { S.score = S.levelStartScore; startLevel(S.level); }
+      else startLevel(1);
+    } catch (err) {
+      fail(err);
+    }
+  }
+  overlay.addEventListener("click", start);
+  overlay.addEventListener("touchend", e => { e.preventDefault(); start(); });
+  btnGo.addEventListener("click", e => { e.stopPropagation(); start(); });
 
   // ── hud / overlay ───────────────────────────────────────────
   function syncHud() {
@@ -903,6 +919,11 @@
   // ── loop ────────────────────────────────────────────────────
   let last = 0;
   function frame(ts) {
+    try { step(ts); } catch (err) { fail(err); return; }   // never die silently
+    requestAnimationFrame(frame);
+  }
+
+  function step(ts) {
     const dt = Math.min(0.05, (ts - last) / 1000 || 0);
     last = ts;
 
@@ -933,7 +954,6 @@
     if (S.shake > 0) S.shake = Math.max(0, S.shake - dt * 22);
 
     draw();
-    requestAnimationFrame(frame);
   }
 
   // ── boot ────────────────────────────────────────────────────
@@ -956,18 +976,33 @@
     }
   }
 
-  new ResizeObserver(resize).observe(cv);
-  addEventListener("resize", resize);
-  resize();
-  requestAnimationFrame(resize);                 // re-measure after first paint
+  // A dead Start button tells you nothing. If boot fails, say so on the card.
+  function fail(err) {
+    ovEyebrow.textContent = "Prototype error";
+    ovTitle.textContent = "SNAG";
+    ovBlurb.textContent = String((err && err.message) || err);
+    ovStats.hidden = true;
+    btnGo.textContent = "Reload";
+    btnGo.onclick = () => location.reload();
+    overlay.hidden = false;
+  }
 
-  // A belt idles behind the title card.
-  S.bags = Array.from({ length: 14 }, (_, i) => ({
-    type: SMALL[i % 5],
-    s: (i * track.total) / 14,
-  }));
-  sizeTiles();
-  syncHud();
-  requestAnimationFrame(frame);
+  try {
+    new ResizeObserver(resize).observe(cv);
+    addEventListener("resize", resize);
+    resize();
+    requestAnimationFrame(resize);               // re-measure after first paint
+
+    // A belt idles behind the title card. If it is moving, the game is alive.
+    S.bags = Array.from({ length: 14 }, (_, i) => ({
+      type: SMALL[i % 5],
+      s: (i * track.total) / 14,
+    }));
+    sizeTiles();
+    syncHud();
+    requestAnimationFrame(frame);
+  } catch (err) {
+    fail(err);
+  }
 })();
 </script>
