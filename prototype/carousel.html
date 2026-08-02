@@ -324,7 +324,8 @@
     speed: 70,
     tile: 44,
     baseTile: 44,
-    levelCount: 14,
+    fitCount: 14,
+    fitFactor: 14,
     timeLeft: 60,
     gateFlash: 0,
     shake: 0,
@@ -394,12 +395,52 @@
     gate.a = ((mid - half) % track.total + track.total) % track.total;
     gate.b = (mid + half) % track.total;
 
-    sizeTiles();
+    refitTiles();
   }
 
-  function sizeTiles() {
-    const n = Math.max(1, S.levelCount);
-    S.tile = Math.max(26, Math.min(S.baseTile, track.total / n - 5));
+  // Bags must never overlap: a bag you cannot cleanly hit is a bag you lose a
+  // whole lap to, which reads as the game cheating rather than as difficulty.
+  // So size tiles from the widths actually drawn, not from an average gap.
+  const BIG_W = 1.66;         // how much wider an oversized tile is drawn
+  const BAG_PAD = 12;         // clear belt between neighbours, in px
+
+  const MIN_TILE = 24;        // below this a bag stops being readable
+  const HARD_MIN = 14;        // absolute floor; only bites on a tiny viewport
+
+  const widthOf = type => TYPES[type].size === 2 ? BIG_W : 1;
+
+  // Never clamp the tile up to a size that no longer fits the belt — that is
+  // what put bags on top of each other. Shrink instead, and keep levels from
+  // being generated so crowded that shrinking makes them unreadable.
+  function refitTiles() {
+    const room = track.total - S.fitCount * BAG_PAD;
+    S.tile = Math.max(HARD_MIN, Math.min(S.baseTile, room / S.fitFactor));
+  }
+
+  function fitsLegibly(types) {
+    const factor = types.reduce((a, t) => a + widthOf(t), 0);
+    return factor * MIN_TILE + types.length * BAG_PAD <= track.total;
+  }
+
+  // Lay bags around the loop back to back, then spend the leftover belt as
+  // random extra spacing. Irregular like a real carousel, never overlapping.
+  function placeBags(types) {
+    S.fitCount = types.length;
+    S.fitFactor = types.reduce((a, t) => a + widthOf(t), 0);
+    refitTiles();
+
+    const used = types.reduce((a, t) => a + S.tile * widthOf(t) + BAG_PAD, 0);
+    const slack = Math.max(0, track.total - used);
+    const share = types.map(() => Math.random());
+    const shareTotal = share.reduce((a, b) => a + b, 0) || 1;
+
+    let cursor = 0;
+    return types.map((type, i) => {
+      const w = S.tile * widthOf(type);
+      const s = (cursor + w / 2) % track.total;
+      cursor += w + BAG_PAD + (slack * share[i]) / shareTotal;
+      return { type, s };
+    });
   }
 
   // Rounded rectangle as a parametric loop: 4 straights + 4 quarter arcs.
@@ -446,24 +487,26 @@
     const pool = SMALL.slice(0, typeCount);
     if (n >= 3) pool.push(...BIG.slice(0, Math.min(BIG.length, Math.floor(n / 3))));
 
-    const triples = Math.min(11, 4 + n);
     S.speed = Math.min(155, 68 + n * 7);
 
-    const types = [];
-    for (let i = 0; i < triples; i++) {
-      const t = pool[(Math.random() * pool.length) | 0];
-      types.push(t, t, t);
+    // Draw the level, then drop a set at a time until the belt can carry it at
+    // a readable size. A short loop on a small phone gets a shorter level, not
+    // a pile of bags stacked on each other.
+    let types = [];
+    for (let triples = Math.min(11, 4 + n); triples >= 2; triples--) {
+      types = [];
+      for (let i = 0; i < triples; i++) {
+        const t = pool[(Math.random() * pool.length) | 0];
+        types.push(t, t, t);
+      }
+      if (fitsLegibly(types)) break;
     }
     for (let i = types.length - 1; i > 0; i--) {          // spread matching sets
       const j = (Math.random() * (i + 1)) | 0;
       [types[i], types[j]] = [types[j], types[i]];
     }
 
-    const gap = track.total / types.length;
-    S.bags = types.map((type, i) => ({
-      type,
-      s: i * gap + (Math.random() - 0.5) * gap * 0.25,
-    }));
+    S.bags = placeBags(types);
 
     S.tray = [];
     S.particles = [];
@@ -472,12 +515,10 @@
     S.comboTimer = 0;
     S.level = n;
     S.levelStartScore = S.score;
-    S.levelCount = S.bags.length;
     // Enough laps to clear the belt playing well, not enough to dither.
     // Without a clock, skipping is free and "wait for a perfect match" wins.
     S.timeLeft = (track.total / S.speed) * (2.0 + S.bags.length / 10);
     S.phase = "playing";
-    sizeTiles();
     syncHud();
   }
 
@@ -823,7 +864,7 @@
 
   function drawTile(x, y, type, scale) {
     const t = TYPES[type];
-    const w = S.tile * (t.size === 2 ? 1.66 : 1) * scale;
+    const w = S.tile * widthOf(type) * scale;
     const h = S.tile * scale;
     const r = Math.min(w, h) * 0.24;
 
@@ -1100,11 +1141,7 @@
     requestAnimationFrame(resize);               // re-measure after first paint
 
     // A belt idles behind the title card. If it is moving, the game is alive.
-    S.bags = Array.from({ length: 14 }, (_, i) => ({
-      type: SMALL[i % 5],
-      s: (i * track.total) / 14,
-    }));
-    sizeTiles();
+    S.bags = placeBags(Array.from({ length: 14 }, (_, i) => SMALL[i % 5]));
     syncHud();
     requestAnimationFrame(frame);
   } catch (err) {

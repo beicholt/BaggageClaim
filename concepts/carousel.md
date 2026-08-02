@@ -153,7 +153,15 @@ selection. Nobody churns on level 47 again.
 | **Belt topology** | Speed changes | Figure-eight; two belts at different speeds; a **junction** you tap to switch, routing bags to the near or far loop |
 | **Goals** | Clear all | Claim only red-tagged bags; VIP passenger timers; quota before the flight boards |
 | **Hazards** | — | A bag you must *never* claim (the unclaimed suspicious package); customs inspection freezing two slots |
+| **Stacking** | — | Bags deliberately piled two deep: only the top one is claimable, taking it reveals the one beneath. Powerful, but it must be *designed* — lifted top bag, explicit z-order, topmost-wins hit priority. Accidental overlap is the same picture and reads as the game cheating |
 | **Theme packs** | Airport re-skins by city | Sushi conveyor, factory line, luggage on a cruise ship, Santa's sorting depot |
+
+One rule governs all of them: **a bag the player can see must be a bag the
+player can hit.** Difficulty comes from scarcity of choice — the claim zone, the
+clock, the tray — never from an unreliable tap. Overlap that isn't deliberately
+designed breaks that rule, so bags are packed by their drawn widths with a fixed
+12px of clear belt between neighbours, and a level sheds a matched set rather
+than crowd the loop past what fits legibly.
 
 Note the pattern: **every one of these is a parameter change plus one sprite set.**
 None of them requires touching the core loop, and none of them invalidates existing
