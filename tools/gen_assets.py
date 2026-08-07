@@ -18,6 +18,7 @@ in is ephemeral, the art is not.
 
 import argparse
 import base64
+import colorsys
 import io
 import json
 import os
@@ -36,9 +37,25 @@ SPEC = ROOT / "tools" / "assets.json"
 ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 # How far a pixel may drift from the backdrop colour and still count as backdrop.
-# Generous, because the model never returns a perfectly flat field — but the fill
-# is seeded from the border only, so a matching colour inside the subject is safe.
-CHROMA_TOL = 78
+# Seeding from the border is not the safeguard it looks like: the antialiased rim
+# is a continuous ramp from backdrop to subject, so any tolerance wide enough to
+# span that ramp lets the fill walk straight into the bag. At 78 it ate most of
+# the mustard suitcase and the teal guitar case, whose colours sit ~75 from the
+# green field. Keep this tight enough that the ramp stops it.
+CHROMA_TOL = 40
+
+# The backdrop also carries a contact shadow, too dark for CHROMA_TOL but the same
+# hue, which survives as a green blob under the bag. A second pass takes anything
+# that shares the backdrop's hue and is darker than it — correct for a shadow,
+# wrong for a subject painted in the backdrop's own hue, which is what
+# "shadow": false in assets.json is for.
+SHADOW_HUE_TOL = 0.055   # fraction of the hue circle
+SHADOW_MIN_SAT = 0.08    # below this it is a grey, not the tinted backdrop
+
+# Backdrop the border fill cannot reach, because the subject encloses it. Tighter
+# than CHROMA_TOL: this test is not anchored to the border, so it is the only
+# thing standing between a subject's midtones and a hole punched through them.
+HOLE_TOL = 28
 
 
 # ── the API ─────────────────────────────────────────────────────
@@ -96,12 +113,15 @@ def generate(model, prompt, api_key, aspect=None, attempts=4):
 
 # ── post-processing ─────────────────────────────────────────────
 
-def key_out_background(img):
+def key_out_background(img, shadow=True):
     """Flood-fill the chroma backdrop away, starting from the frame border.
 
-    Seeding from the border rather than keying globally is the whole point: the
-    olive medical case and the pink garment bag would lose chunks of themselves
-    to a naive colour key, but nothing inside a bag connects to the edge.
+    Seeding from the border rather than keying globally is what lets a bag keep
+    a colour the backdrop also contains — but only as far as CHROMA_TOL stays
+    narrower than the antialiased rim, or the fill crosses it and keeps going.
+
+    `shadow` adds the hue-matched second pass that lifts the contact shadow.
+    Turn it off for a subject painted in the backdrop's own hue.
     """
     img = img.convert("RGBA")
     w, h = img.size
@@ -112,10 +132,19 @@ def key_out_background(img):
     kg = sum(c[1] for c in corners) // 4
     kb = sum(c[2] for c in corners) // 4
     tol2 = CHROMA_TOL * CHROMA_TOL
+    k_hue, k_light, _ = colorsys.rgb_to_hls(kr / 255, kg / 255, kb / 255)
+
+    def is_shadow(r, g, b):
+        hue, light, sat = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+        drift = abs(hue - k_hue)
+        return (min(drift, 1 - drift) <= SHADOW_HUE_TOL
+                and light < k_light and sat > SHADOW_MIN_SAT)
 
     def is_bg(x, y):
         r, g, b, _ = px[x, y]
-        return (r - kr) ** 2 + (g - kg) ** 2 + (b - kb) ** 2 <= tol2
+        if (r - kr) ** 2 + (g - kg) ** 2 + (b - kb) ** 2 <= tol2:
+            return True
+        return shadow and is_shadow(r, g, b)
 
     seen = bytearray(w * h)
     q = deque()
@@ -136,6 +165,32 @@ def key_out_background(img):
             if 0 <= nx < w and 0 <= ny < h and not seen[ny * w + nx] and is_bg(nx, ny):
                 seen[ny * w + nx] = 1
                 q.append((nx, ny))
+
+    # The border fill cannot reach backdrop it does not touch — the gap under a
+    # handle, the triangle inside a strap — so those survive as green patches
+    # welded to the bag. Sweep them separately, on a tolerance tight enough that
+    # only the flat field qualifies and no part of a subject does.
+    hole_tol2 = HOLE_TOL * HOLE_TOL
+    for sy in range(h):
+        for sx in range(w):
+            if seen[sy * w + sx]:
+                continue
+            r, g, b, _ = px[sx, sy]
+            if (r - kr) ** 2 + (g - kg) ** 2 + (b - kb) ** 2 > hole_tol2:
+                continue
+            blob = [(sx, sy)]
+            seen[sy * w + sx] = 1
+            hq = deque(blob)
+            while hq:
+                x, y = hq.popleft()
+                for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+                    if not (0 <= nx < w and 0 <= ny < h) or seen[ny * w + nx]:
+                        continue
+                    r, g, b, _ = px[nx, ny]
+                    if (r - kr) ** 2 + (g - kg) ** 2 + (b - kb) ** 2 <= hole_tol2:
+                        seen[ny * w + nx] = 1
+                        blob.append((nx, ny))
+                        hq.append((nx, ny))
 
     alpha = Image.frombytes("L", (w, h), bytes(255 if not s else 0 for s in seen))
     # Chroma bleeds a green rim into the antialiased edge. Pulling the matte in
@@ -172,7 +227,7 @@ def fit(img, width=None, height=None):
 def post(raw_bytes, spec):
     img = Image.open(io.BytesIO(raw_bytes))
     if spec.get("alpha") == "chroma":
-        img = key_out_background(img)
+        img = key_out_background(img, shadow=spec.get("shadow", True))
         if spec.get("trim", True):
             img = trim_to_alpha(img)
     else:

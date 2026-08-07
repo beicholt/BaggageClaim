@@ -762,7 +762,13 @@
     for (const id of ids) {
       const img = new Image();
       img.onload = () => {
-        for (const tex of variants[id] || []) { tex.image = img; tex.needsUpdate = true; }
+        // dispose() first: the GPU storage was allocated for the procedural
+        // canvas, and the PNG almost never matches its dimensions. Without it
+        // three.js patches the old allocation in place, the driver rejects the
+        // oversized write, and the fallback art stays on screen for good.
+        for (const tex of variants[id] || []) {
+          tex.dispose(); tex.image = img; tex.needsUpdate = true;
+        }
         buildAlphaMap(id, img, img.naturalWidth, img.naturalHeight);
         if (onEach) onEach(id);
       };

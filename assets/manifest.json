@@ -1,1 +1,122 @@
-{}
+{
+  "bag_backpack": {
+    "alpha": true,
+    "file": "bag_backpack.png",
+    "h": 256,
+    "w": 216
+  },
+  "bag_duffel": {
+    "alpha": true,
+    "file": "bag_duffel.png",
+    "h": 256,
+    "w": 262
+  },
+  "bag_garment": {
+    "alpha": true,
+    "file": "bag_garment.png",
+    "h": 256,
+    "w": 157
+  },
+  "bag_golf": {
+    "alpha": true,
+    "file": "bag_golf.png",
+    "h": 200,
+    "w": 363
+  },
+  "bag_guitar": {
+    "alpha": true,
+    "file": "bag_guitar.png",
+    "h": 200,
+    "w": 495
+  },
+  "bag_medcase": {
+    "alpha": true,
+    "file": "bag_medcase.png",
+    "h": 256,
+    "w": 315
+  },
+  "bag_petcarrier": {
+    "alpha": true,
+    "file": "bag_petcarrier.png",
+    "h": 256,
+    "w": 262
+  },
+  "bag_rollaboard": {
+    "alpha": true,
+    "file": "bag_rollaboard.png",
+    "h": 256,
+    "w": 155
+  },
+  "bag_surfboard": {
+    "alpha": true,
+    "file": "bag_surfboard.png",
+    "h": 200,
+    "w": 404
+  },
+  "bag_vintage": {
+    "alpha": true,
+    "file": "bag_vintage.png",
+    "h": 256,
+    "w": 226
+  },
+  "bg_apron": {
+    "alpha": false,
+    "file": "bg_apron.png",
+    "h": 878,
+    "w": 1536
+  },
+  "bg_sky": {
+    "alpha": false,
+    "file": "bg_sky.png",
+    "h": 878,
+    "w": 1536
+  },
+  "bg_skyline": {
+    "alpha": true,
+    "file": "bg_skyline.png",
+    "h": 830,
+    "w": 1536
+  },
+  "spr_plane": {
+    "alpha": true,
+    "file": "spr_plane.png",
+    "h": 320,
+    "w": 1303
+  },
+  "spr_strip_curtain": {
+    "alpha": true,
+    "file": "spr_strip_curtain.png",
+    "h": 384,
+    "w": 355
+  },
+  "spr_taxi": {
+    "alpha": true,
+    "file": "spr_taxi.png",
+    "h": 160,
+    "w": 201
+  },
+  "spr_tug": {
+    "alpha": true,
+    "file": "spr_tug.png",
+    "h": 160,
+    "w": 705
+  },
+  "tex_belt_slats": {
+    "alpha": false,
+    "file": "tex_belt_slats.png",
+    "h": 512,
+    "w": 512
+  },
+  "tex_floor": {
+    "alpha": false,
+    "file": "tex_floor.png",
+    "h": 512,
+    "w": 512
+  },
+  "tex_steel": {
+    "alpha": false,
+    "file": "tex_steel.png",
+    "h": 512,
+    "w": 512
+  }
+}

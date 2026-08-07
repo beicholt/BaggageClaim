@@ -29,6 +29,7 @@
     },
     {
       "id": "bag_medcase", "style": "sprite", "alpha": "chroma", "trim": true, "height": 256,
+      "shadow": false,
       "prompt": "An olive-green rigid medical hard case, boxy with reinforced ribbed edges, lid closed. One large bold white cross centred on the lid. Two chunky black latches and a black top handle."
     },
     {
