@@ -261,6 +261,44 @@ CPI gate.
 
 ## Prototype
 
-`prototype/carousel.html` — playable, touch-first, single file, no dependencies.
-Open it on a phone. It implements the belt, the tray, matching, oversized bags,
-the flow multiplier, the Return booster, and endless generated levels.
+`prototype/carousel3d.html` — playable, touch-first, open it on a phone. It
+implements the belt, the tray, matching, oversized bags, the flow multiplier,
+the Return booster, and endless generated levels, in a real 3D baggage hall.
+
+`prototype/carousel.html` is the earlier flat build, kept because it is the
+smaller thing to read when checking what a rule does.
+
+### What going to 3D changed about the design
+
+Two of these are worth carrying into the Unity build, because they are
+consequences of the design rather than of the renderer.
+
+**The belt stopped being measured in pixels.** In the flat build the loop was
+laid out in screen coordinates, so a bigger phone got a longer belt, more bags
+fitted on it, and every resize had to rescale each bag's position to keep the
+spacing. The belt is now a fixed object in world units with the camera fitted to
+the viewport, which means a level is the same level on every device — a
+precondition for the seeded levels and leaderboards the concept assumes.
+
+**The claim zone is the nearest thing to the camera, which makes it the thing
+the layout fights over.** Fit the carousel to the whole screen and the one
+stretch of belt the player may touch is exactly the stretch the tray covers.
+The frame has to reserve the bottom before it fits anything else.
+
+**Perspective does some of the teaching.** Out-of-reach bags on the far run are
+smaller and dimmer without any extra signalling, and the wall that hides the top
+of the loop is now geometry that occludes rather than a rectangle painted over
+the top. The tutorial gets a little cheaper.
+
+### Art pipeline
+
+Assets are generated, not authored: `tools/assets.json` holds one prompt per
+asset plus a shared style block, and `tools/gen_assets.py` renders them through
+the Gemini image API, keys out the backdrop and trims each sprite. This is the
+same argument as the level generator — the content axes in the table above are
+each "a parameter change plus one sprite set", and a sprite set has to be
+something you can order rather than commission if a theme pack is going to cost
+a week instead of a month.
+
+The prototype falls back to flat vector art for anything not generated yet, so
+the pipeline is never on the critical path for a rules change.
