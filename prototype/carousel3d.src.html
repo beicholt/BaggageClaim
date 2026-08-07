@@ -1,0 +1,1693 @@
+<title>Carousel — baggage claim, but a puzzle</title>
+<!-- Source form. `python3 tools/build_prototype.py` inlines three.js and every
+     PNG as data URIs and writes prototype/carousel3d.html, which is the file
+     you actually open — browsers refuse to upload a file:// image into a WebGL
+     texture, so a phone can only run the inlined build. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<style>
+  /* Deliberate single visual world: an arrivals hall at 2am.
+     Steel, rubber, and amber signage — no light theme by design. */
+  :root {
+    --ink:      #090D12;
+    --steel:    #1A2029;
+    --steel-hi: #2B3541;
+    --bone:     #E8E4DA;
+    --dim:      #79838F;
+    --amber:    #FFB23F;
+    --red:      #FF6B5E;
+    --sign: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --data: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--ink);
+    color: var(--bone);
+    font-family: var(--sign);
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior: none;
+  }
+
+  body {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  .frame {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    /* Bounded on both ends: some hosts size their frame from content height,
+       and an unbounded viewport unit feeds back into that and runs away. */
+    height: 100dvh;
+    min-height: 540px;
+    max-height: 1024px;
+    max-width: 520px;
+    margin: 0 auto;
+    background: var(--ink);
+  }
+
+  /* ── signage strip ─────────────────────────────────────────── */
+  .hud {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 16px 10px;
+    border-bottom: 1px solid #1D242D;
+    background: linear-gradient(180deg, #12181F, #0C1116);
+  }
+
+  .stat { display: flex; flex-direction: column; gap: 3px; }
+  .stat--mid { align-items: center; }
+  .stat--end { align-items: flex-end; }
+
+  .label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  .value {
+    font-family: var(--data);
+    font-variant-numeric: tabular-nums;
+    font-size: 19px;
+    line-height: 1;
+    color: var(--bone);
+  }
+  .value--score { font-size: 22px; }
+  .value--time.is-low { color: var(--red); }
+
+  .combo {
+    font-family: var(--data);
+    font-size: 19px;
+    line-height: 1;
+    color: var(--steel-hi);
+    transition: color .18s ease, transform .18s ease;
+  }
+  .combo.is-hot { color: var(--amber); transform: scale(1.14); }
+
+  /* ── play field ────────────────────────────────────────────── */
+  /* Two stacked canvases: WebGL underneath for the hall, a 2D canvas on top
+     for the tray, particles and the manifest. Text and small UI stay crisp
+     on the 2D layer instead of fighting the 3D camera for legibility. */
+  .stage {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .stage canvas {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  #gl { pointer-events: none; }
+
+  /* ── dock ──────────────────────────────────────────────────── */
+  .dock {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
+    border-top: 1px solid #1D242D;
+    background: #0C1116;
+  }
+
+  button {
+    font-family: var(--sign);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--bone);
+    background: var(--steel);
+    border: 1px solid var(--steel-hi);
+    border-radius: 3px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: background .14s ease, opacity .14s ease;
+  }
+  button:hover { background: var(--steel-hi); }
+  button:active { background: #35404E; }
+  button:disabled { opacity: .3; cursor: default; }
+  button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+  .btn--return { flex: 1 1 auto; }
+  .btn--return b {
+    font-family: var(--data);
+    font-weight: 400;
+    color: var(--amber);
+    margin-left: 7px;
+  }
+  .btn--icon { padding: 12px 14px; font-size: 13px; letter-spacing: 0; }
+
+  /* ── overlay ───────────────────────────────────────────────── */
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    text-align: center;
+    background: rgba(6, 9, 13, .9);
+    backdrop-filter: blur(3px);
+    z-index: 2;
+  }
+  .overlay[hidden] { display: none; }
+
+  .eyebrow {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin-bottom: 10px;
+  }
+
+  h1 {
+    font-size: clamp(40px, 14vw, 66px);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: .92;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .blurb {
+    max-width: 30ch;
+    margin: 16px 0 0;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--dim);
+  }
+  .blurb em { color: var(--bone); font-style: normal; }
+
+  .readout {
+    display: flex;
+    gap: 28px;
+    margin: 22px 0 0;
+    font-family: var(--data);
+    font-variant-numeric: tabular-nums;
+  }
+  .readout div { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+  .readout span { font-size: 25px; color: var(--bone); }
+  .readout small {
+    font-family: var(--sign);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  .go {
+    margin-top: 26px;
+    padding: 15px 34px;
+    font-size: 13px;
+    background: var(--amber);
+    border-color: var(--amber);
+    color: #16120A;
+  }
+  .go:hover { background: #FFC66E; border-color: #FFC66E; }
+  .go:active { background: #E89C2C; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .combo { transition: none; }
+  }
+</style>
+
+<div class="frame">
+  <header class="hud">
+    <div class="stat">
+      <div class="label">Belt</div>
+      <div class="value" id="hudLevel">01</div>
+    </div>
+    <div class="stat stat--mid">
+      <div class="label">Departs</div>
+      <div class="value value--time" id="hudTime">1:00</div>
+    </div>
+    <div class="stat stat--mid">
+      <div class="label">Flow</div>
+      <div class="combo" id="hudCombo">&times;1</div>
+    </div>
+    <div class="stat stat--end">
+      <div class="label">Score</div>
+      <div class="value value--score" id="hudScore">0</div>
+    </div>
+  </header>
+
+  <div class="stage" id="stage">
+    <canvas id="gl"></canvas>
+    <canvas id="ui"></canvas>
+  </div>
+
+  <footer class="dock">
+    <button class="btn--return" id="btnReturn">Return bag <b id="returnCount">3</b></button>
+    <button class="btn--icon" id="btnSound" aria-label="Mute sound">&#9835;</button>
+  </footer>
+
+  <div class="overlay" id="overlay">
+    <div class="eyebrow" id="ovEyebrow">Arrivals</div>
+    <h1 id="ovTitle">CAROUSEL</h1>
+    <p class="blurb" id="ovBlurb">You can only grab bags in the <em>lit zone</em> in front of you.<br>Three matching bags send a traveler home.<br>Skip one and you wait a full lap for it.</p>
+    <div class="readout" id="ovStats" hidden>
+      <div><span id="ovScore">0</span><small>Score</small></div>
+      <div><span id="ovBest">&times;1</span><small>Best flow</small></div>
+    </div>
+    <button class="go" id="btnGo">Start</button>
+  </div>
+</div>
+
+<script src="vendor/three.global.js"></script><!-- @@THREE@@ -->
+<script>
+(() => {
+  "use strict";
+
+  const T = window.THREE;
+
+  // Replaced by tools/build_prototype.py with { id: "data:image/png;base64,…" }.
+  // Null means "load from ../assets/", which only works over http.
+  const INLINE_ASSETS = null; // @@ASSETS@@
+
+  // ── tuning ──────────────────────────────────────────────────
+  const CAP          = 7;    // tray slots
+  const COMBO_WINDOW = 4.0;  // seconds to hold the flow multiplier
+  const RETURNS      = 3;    // per level
+  const FLY_TIME     = 0.28;
+  const MULTS        = [1, 1, 2, 3, 5];
+
+  // Every bag is identified by hue AND motif, so the game stays readable for
+  // colorblind players and never depends on emoji fonts. `art` names the
+  // generated sprite; the hue and motif still drive the fallback and the
+  // manifest, so the game is fully playable before a single asset exists.
+  const TYPES = [
+    { c: "#E0674F", m: "bandH",  size: 1, art: "bag_rollaboard" },
+    { c: "#4E9BD4", m: "bandV",  size: 1, art: "bag_duffel"     },
+    { c: "#C8A33C", m: "dots",   size: 1, art: "bag_vintage"    },
+    { c: "#9E6BC9", m: "ring",   size: 1, art: "bag_backpack"   },
+    { c: "#7FA05A", m: "cross",  size: 1, art: "bag_medcase"    },
+    { c: "#DE6B95", m: "chev",   size: 1, art: "bag_garment"    },
+    { c: "#54B3A6", m: "grid",   size: 1, art: "bag_petcarrier" },
+    { c: "#D98A3E", m: "diag",   size: 2, art: "bag_surfboard"  },
+    { c: "#6E7FD1", m: "bandV",  size: 2, art: "bag_golf"       },
+    { c: "#3FA9C4", m: "dots",   size: 2, art: "bag_guitar"     },
+  ];
+  const SMALL = TYPES.map((t, i) => i).filter(i => TYPES[i].size === 1);
+  const BIG   = TYPES.map((t, i) => i).filter(i => TYPES[i].size === 2);
+
+  const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ── world ───────────────────────────────────────────────────
+  // The belt is a fixed-size object in world units and the camera adapts to the
+  // viewport, which is the whole reason for going to 3D: in the flat build the
+  // track was measured in screen pixels, so every phone got a different-length
+  // belt and bag spacing had to be rescaled on every resize.
+  // Near-square, deliberately: a wide loop forces the camera far back on a
+  // portrait phone, and a deep one shrinks the far run until you cannot plan
+  // against it. Square keeps every bag within a readable range of sizes.
+  const RECT     = { w: 7.8, h: 7.6, r: 2.6 };
+  const BELT_W   = 1.15;   // belt surface width
+  const BELT_Y   = 0.55;   // belt surface height above the floor
+  const WALL_Z   = -3.0;   // front face of the baggage hall wall
+  const GATE_SPAN = 0.19;  // fraction of the loop you may claim from
+
+  const BASE_TILE = 0.66;  // bag width, world units
+  const MIN_TILE  = 0.44;  // below this a bag stops being readable
+  const HARD_MIN  = 0.30;
+  const BAG_PAD   = 0.17;  // clear belt between neighbours
+  const BIG_W     = 1.66;  // how much wider an oversized bag is
+
+  const widthOf = type => TYPES[type].size === 2 ? BIG_W : 1;
+
+  // ── elements ────────────────────────────────────────────────
+  const stageEl   = document.getElementById("stage");
+  const glCanvas  = document.getElementById("gl");
+  const uiCanvas  = document.getElementById("ui");
+  const ctx       = uiCanvas.getContext("2d");
+  const hudLevel  = document.getElementById("hudLevel");
+  const hudScore  = document.getElementById("hudScore");
+  const hudCombo  = document.getElementById("hudCombo");
+  const hudTime   = document.getElementById("hudTime");
+  const btnReturn = document.getElementById("btnReturn");
+  const btnSound  = document.getElementById("btnSound");
+  const returnCt  = document.getElementById("returnCount");
+  const overlay   = document.getElementById("overlay");
+  const ovEyebrow = document.getElementById("ovEyebrow");
+  const ovTitle   = document.getElementById("ovTitle");
+  const ovBlurb   = document.getElementById("ovBlurb");
+  const ovStats   = document.getElementById("ovStats");
+  const ovScore   = document.getElementById("ovScore");
+  const ovBest    = document.getElementById("ovBest");
+  const btnGo     = document.getElementById("btnGo");
+
+  // ── state ───────────────────────────────────────────────────
+  const S = {
+    phase: "intro",      // intro | playing | won | lost
+    level: 1,
+    score: 0,
+    levelStartScore: 0,
+    combo: 0,
+    bestCombo: 1,
+    comboTimer: 0,
+    returns: RETURNS,
+    bags: [],            // { type, s }  s = arclength along the belt
+    tray: [],            // { type, fly:{x,y,t}|null }
+    particles: [],
+    speed: 70 / 88,      // world units/sec; the flat build's px/s over its px/unit
+    tile: BASE_TILE,
+    fitCount: 14,
+    fitFactor: 14,
+    timeLeft: 60,
+    gateFlash: 0,
+    shake: 0,
+    beltPhase: 0,
+    clock: 0,
+  };
+
+  let W = 0, H = 0, DPR = 1;
+  let trayBox = { x: 0, y: 0, w: 0, h: 0, slotW: 0, gap: 6 };
+
+  // ── the loop, as arclength ──────────────────────────────────
+  // Rounded rectangle as a parametric loop: 4 straights + 4 quarter arcs.
+  // Identical to the flat build, so every rule that reads `s` is unchanged.
+  function buildTrack(rect) {
+    const x = -rect.w / 2, y = -rect.h / 2, { w, h, r } = rect;
+    const sw = w - 2 * r, sh = h - 2 * r, arc = (Math.PI / 2) * r;
+    const segs = [
+      { t: "l", len: sw,  x0: x + r,     y0: y,         x1: x + w - r, y1: y },
+      { t: "a", len: arc, cx: x + w - r, cy: y + r,     a0: -Math.PI / 2, a1: 0 },
+      { t: "l", len: sh,  x0: x + w,     y0: y + r,     x1: x + w,     y1: y + h - r },
+      { t: "a", len: arc, cx: x + w - r, cy: y + h - r, a0: 0, a1: Math.PI / 2 },
+      { t: "l", len: sw,  x0: x + w - r, y0: y + h,     x1: x + r,     y1: y + h },
+      { t: "a", len: arc, cx: x + r,     cy: y + h - r, a0: Math.PI / 2, a1: Math.PI },
+      { t: "l", len: sh,  x0: x,         y0: y + h - r, x1: x,         y1: y + r },
+      { t: "a", len: arc, cx: x + r,     cy: y + r,     a0: Math.PI, a1: Math.PI * 1.5 },
+    ];
+    let total = 0;
+    for (const s of segs) { s.start = total; total += s.len; }
+    return { rect, segs, total };
+  }
+
+  const track = buildTrack(RECT);
+  const gate = (() => {
+    // Centre the claim zone on the near side of the loop, closest to the camera.
+    const bottom = track.segs[4];
+    const mid = bottom.start + bottom.len / 2;
+    const half = (track.total * GATE_SPAN) / 2;
+    return {
+      a: ((mid - half) % track.total + track.total) % track.total,
+      b: (mid + half) % track.total,
+      mid,
+    };
+  })();
+
+  function pointAt(s) {
+    const L = track.total;
+    s = ((s % L) + L) % L;
+    for (const g of track.segs) {
+      if (s <= g.start + g.len) {
+        const k = (s - g.start) / g.len;
+        if (g.t === "l") {
+          return { x: g.x0 + (g.x1 - g.x0) * k, y: g.y0 + (g.y1 - g.y0) * k };
+        }
+        const a = g.a0 + (g.a1 - g.a0) * k;
+        return { x: g.cx + Math.cos(a) * track.rect.r, y: g.cy + Math.sin(a) * track.rect.r };
+      }
+    }
+    return { x: 0, y: 0 };
+  }
+
+  // Outward normal, from the tangent. The loop is wound so that rotating the
+  // tangent by -90° always points away from the centre.
+  function normalAt(s) {
+    const e = 0.01;
+    const p0 = pointAt(s - e), p1 = pointAt(s + e);
+    const tx = p1.x - p0.x, ty = p1.y - p0.y;
+    const m = Math.hypot(tx, ty) || 1;
+    return { x: ty / m, y: -tx / m };
+  }
+
+  function inGate(s) {
+    const L = track.total;
+    s = ((s % L) + L) % L;
+    return gate.a < gate.b
+      ? s >= gate.a && s <= gate.b
+      : s >= gate.a || s <= gate.b;     // range wraps past zero
+  }
+
+  // Behind the hall wall: not claimable, and the wall geometry occludes it too.
+  const inHall = s => pointAt(s).y < WALL_Z;
+
+  // ── bag placement ───────────────────────────────────────────
+  function refitTiles() {
+    const room = track.total - S.fitCount * BAG_PAD;
+    S.tile = Math.max(HARD_MIN, Math.min(BASE_TILE, room / S.fitFactor));
+  }
+
+  function fitsLegibly(types) {
+    const factor = types.reduce((a, t) => a + widthOf(t), 0);
+    return factor * MIN_TILE + types.length * BAG_PAD <= track.total;
+  }
+
+  // Lay bags around the loop back to back, then spend the leftover belt as
+  // random extra spacing. Irregular like a real carousel, never overlapping.
+  function placeBags(types) {
+    S.fitCount = types.length;
+    S.fitFactor = types.reduce((a, t) => a + widthOf(t), 0);
+    refitTiles();
+
+    const used = types.reduce((a, t) => a + S.tile * widthOf(t) + BAG_PAD, 0);
+    const slack = Math.max(0, track.total - used);
+    const share = types.map(() => Math.random());
+    const shareTotal = share.reduce((a, b) => a + b, 0) || 1;
+
+    let cursor = 0;
+    return types.map((type, i) => {
+      const w = S.tile * widthOf(type);
+      const s = (cursor + w / 2) % track.total;
+      cursor += w + BAG_PAD + (slack * share[i]) / shareTotal;
+      return { type, s };
+    });
+  }
+
+  // ── procedural art, used until the generated assets load ────
+  const MOTIF = {
+    bandH: (c, w, h) => c.fillRect(-w / 2, -h * 0.13, w, h * 0.26),
+    bandV: (c, w, h) => c.fillRect(-w * 0.13, -h / 2, w * 0.26, h),
+    cross: (c, w, h) => {
+      c.fillRect(-w / 2, -h * 0.11, w, h * 0.22);
+      c.fillRect(-w * 0.11, -h / 2, w * 0.22, h);
+    },
+    dots: (c, w, h) => {
+      for (const dx of [-0.24, 0, 0.24]) {
+        c.beginPath(); c.arc(dx * w, 0, h * 0.11, 0, Math.PI * 2); c.fill();
+      }
+    },
+    ring: (c, w, h) => {
+      c.lineWidth = h * 0.12; c.strokeStyle = c.fillStyle;
+      c.beginPath(); c.arc(0, 0, h * 0.25, 0, Math.PI * 2); c.stroke();
+    },
+    chev: (c, w, h) => {
+      c.lineWidth = h * 0.11; c.strokeStyle = c.fillStyle; c.lineCap = "round";
+      for (const dy of [-0.16, 0.12]) {
+        c.beginPath();
+        c.moveTo(-w * 0.2, dy * h + h * 0.1);
+        c.lineTo(0, dy * h - h * 0.08);
+        c.lineTo(w * 0.2, dy * h + h * 0.1);
+        c.stroke();
+      }
+      c.lineCap = "butt";
+    },
+    grid: (c, w, h) => {
+      c.fillRect(-w / 2, -h * 0.29, w, h * 0.1);
+      c.fillRect(-w / 2, h * 0.19, w, h * 0.1);
+      c.fillRect(-w * 0.29, -h / 2, w * 0.1, h);
+      c.fillRect(w * 0.19, -h / 2, w * 0.1, h);
+    },
+    diag: (c, w, h) => {
+      c.save(); c.rotate(-0.6);
+      for (const dx of [-0.34, 0, 0.34]) c.fillRect(dx * w - h * 0.05, -h, h * 0.13, h * 2);
+      c.restore();
+    },
+  };
+
+  function surface(w, h) {
+    const cv = document.createElement("canvas");
+    cv.width = w; cv.height = h;
+    return { cv, c: cv.getContext("2d") };
+  }
+
+  function roundRectPath(c, x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+
+  // The flat build's tile art, baked to a texture. Identical silhouette, so
+  // swapping in a generated sprite changes the look and nothing about the feel.
+  function drawTileArt(c, w, h, type) {
+    const t = TYPES[type];
+    const r = Math.min(w, h) * 0.24;
+    c.save();
+    c.translate(w / 2, h / 2);
+
+    c.strokeStyle = "rgba(8,11,15,.72)";      // handle, behind the body
+    c.lineWidth = h * 0.1;
+    c.beginPath();
+    c.arc(0, -h / 2 + h * 0.06, w * 0.19, Math.PI * 1.12, Math.PI * 1.88);
+    c.stroke();
+
+    c.fillStyle = t.c;
+    roundRectPath(c, -w / 2 + 2, -h / 2 + 2, w - 4, h - 4, r);
+    c.fill();
+
+    c.save();
+    roundRectPath(c, -w / 2 + 2, -h / 2 + 2, w - 4, h - 4, r);
+    c.clip();
+    c.fillStyle = "rgba(10,14,19,.34)";
+    MOTIF[t.m](c, w - 4, h - 4);
+    c.restore();
+
+    c.fillStyle = "rgba(255,255,255,.15)";    // top light
+    roundRectPath(c, -w / 2 + 4, -h / 2 + 4, w - 8, h * 0.2, r * 0.6);
+    c.fill();
+
+    c.strokeStyle = "rgba(0,0,0,.34)";
+    c.lineWidth = 2;
+    roundRectPath(c, -w / 2 + 2, -h / 2 + 2, w - 4, h - 4, r);
+    c.stroke();
+    c.restore();
+  }
+
+  const FALLBACK = {
+    bag(type) {
+      const w = Math.round(192 * widthOf(type));
+      const { cv, c } = surface(w, 192);
+      drawTileArt(c, w, 192, type);
+      return cv;
+    },
+    tex_belt_slats() {
+      const { cv, c } = surface(128, 128);
+      c.fillStyle = "#20262E"; c.fillRect(0, 0, 128, 128);
+      for (let y = 0; y < 128; y += 16) {
+        c.fillStyle = "#2C343E"; c.fillRect(0, y, 128, 12);
+        c.fillStyle = "#12171D"; c.fillRect(0, y + 12, 128, 4);
+      }
+      return cv;
+    },
+    tex_steel() {
+      const { cv, c } = surface(128, 128);
+      c.fillStyle = "#525C68"; c.fillRect(0, 0, 128, 128);
+      for (let i = 0; i < 700; i++) {
+        c.fillStyle = `rgba(255,255,255,${Math.random() * 0.07})`;
+        c.fillRect(Math.random() * 128, Math.random() * 128, 12, 1);
+      }
+      return cv;
+    },
+    tex_floor() {
+      const { cv, c } = surface(128, 128);
+      c.fillStyle = "#2A2F36"; c.fillRect(0, 0, 128, 128);
+      for (let i = 0; i < 900; i++) {
+        c.fillStyle = `rgba(200,205,215,${Math.random() * 0.12})`;
+        c.fillRect(Math.random() * 128, Math.random() * 128, 2, 2);
+      }
+      return cv;
+    },
+    bg_sky() {
+      const { cv, c } = surface(64, 256);
+      const g = c.createLinearGradient(0, 0, 0, 256);
+      g.addColorStop(0, "#16283F"); g.addColorStop(0.55, "#3C4E62");
+      g.addColorStop(0.8, "#8A7C6E"); g.addColorStop(1, "#C99C63");
+      c.fillStyle = g; c.fillRect(0, 0, 64, 256);
+      return cv;
+    },
+    bg_skyline() {
+      const { cv, c } = surface(512, 128);
+      c.clearRect(0, 0, 512, 128);
+      c.fillStyle = "#2B3948";
+      for (let x = 0; x < 512; x += 26) {
+        const h = 16 + Math.random() * 34;
+        c.fillRect(x, 128 - h, 22, h);
+      }
+      c.fillRect(300, 44, 12, 84);                 // control tower
+      c.fillRect(292, 32, 28, 16);
+      return cv;
+    },
+    bg_apron() {
+      const { cv, c } = surface(512, 128);
+      c.fillStyle = "#3A3F46"; c.fillRect(0, 0, 512, 128);
+      c.fillStyle = "#4A5058"; c.fillRect(0, 0, 512, 10);
+      c.strokeStyle = "#C0A24A"; c.lineWidth = 4;
+      c.beginPath(); c.moveTo(0, 60); c.lineTo(512, 60); c.stroke();
+      c.setLineDash([26, 22]);
+      c.strokeStyle = "#D8D2C4"; c.lineWidth = 3;
+      c.beginPath(); c.moveTo(0, 104); c.lineTo(512, 104); c.stroke();
+      c.setLineDash([]);
+      return cv;
+    },
+    spr_plane() {
+      const { cv, c } = surface(320, 96);
+      c.clearRect(0, 0, 320, 96);
+      c.fillStyle = "#DFE3E8";
+      roundRectPath(c, 20, 40, 250, 26, 13); c.fill();
+      c.beginPath(); c.moveTo(258, 42); c.lineTo(312, 20); c.lineTo(272, 44); c.fill();
+      c.beginPath(); c.moveTo(120, 52); c.lineTo(190, 84); c.lineTo(150, 54); c.fill();
+      c.fillStyle = "#AAB2BC";
+      roundRectPath(c, 130, 62, 34, 14, 7); c.fill();
+      return cv;
+    },
+    spr_taxi() {
+      const { cv, c } = surface(160, 80);
+      c.clearRect(0, 0, 160, 80);
+      c.fillStyle = "#E8B93C";
+      roundRectPath(c, 8, 32, 144, 32, 10); c.fill();
+      roundRectPath(c, 44, 12, 72, 26, 8); c.fill();
+      c.fillStyle = "#1B2029";
+      roundRectPath(c, 52, 16, 56, 18, 5); c.fill();
+      for (const x of [40, 118]) { c.beginPath(); c.arc(x, 64, 12, 0, Math.PI * 2); c.fill(); }
+      return cv;
+    },
+    spr_tug() {
+      const { cv, c } = surface(200, 80);
+      c.clearRect(0, 0, 200, 80);
+      c.fillStyle = "#D6DAE0";
+      roundRectPath(c, 6, 26, 54, 34, 6); c.fill();
+      c.fillStyle = "#9AA2AC";
+      c.fillRect(70, 46, 54, 12); c.fillRect(134, 46, 54, 12);
+      c.fillStyle = "#7C8794";
+      c.fillRect(78, 30, 18, 16); c.fillRect(100, 32, 16, 14);
+      c.fillRect(142, 30, 18, 16); c.fillRect(164, 34, 16, 12);
+      c.fillStyle = "#1B2029";
+      for (const x of [20, 50, 84, 116, 148, 180]) {
+        c.beginPath(); c.arc(x, 62, 8, 0, Math.PI * 2); c.fill();
+      }
+      return cv;
+    },
+    spr_strip_curtain() {
+      const { cv, c } = surface(192, 128);
+      c.clearRect(0, 0, 192, 128);
+      c.fillStyle = "#0A0D11"; c.fillRect(0, 0, 192, 128);
+      for (let x = 4; x < 192; x += 16) {
+        c.fillStyle = `rgba(196,204,214,${0.16 + (x % 32 ? 0.06 : 0)})`;
+        c.fillRect(x, 6, 12, 122);
+      }
+      return cv;
+    },
+  };
+
+  // ── textures ────────────────────────────────────────────────
+  // Everything starts on procedural art and upgrades in place when the
+  // generated PNG arrives, so a missing or half-finished assets/ folder
+  // degrades to the flat look instead of to a blank screen.
+  const textures = {};   // id → THREE.Texture
+  const variants = {};   // id → [THREE.Texture]  every texture sharing that image
+  const alphaMaps = {};  // id → { data, n } for pixel-exact tapping
+  const aspects = {};    // id → width / height
+
+  function makeTexture(id, canvasOrImage, { repeat = false } = {}) {
+    const tex = new T.Texture(canvasOrImage);
+    tex.colorSpace = T.SRGBColorSpace;
+    tex.anisotropy = 4;
+    if (repeat) { tex.wrapS = tex.wrapT = T.RepeatWrapping; }
+    tex.needsUpdate = true;
+    (variants[id] = variants[id] || []).push(tex);
+    return tex;
+  }
+
+  // A second texture over the same image with its own tiling. Registered under
+  // the same id, so it picks up the generated PNG along with the original.
+  function variant(id, rx, ry) {
+    const tex = makeTexture(id, textures[id].image, { repeat: true });
+    tex.repeat.set(rx, ry);
+    return tex;
+  }
+
+  // A 64×64 alpha thumbnail per sprite. Raycasting a textured quad otherwise
+  // reports a hit on the transparent corners, and "a bag you can see must be a
+  // bag you can hit" cuts both ways — you must not hit the bag's empty corner
+  // and lose the tap that was meant for the bag behind it.
+  function buildAlphaMap(id, source, w, h) {
+    const N = 64;
+    const { cv, c } = surface(N, N);
+    c.clearRect(0, 0, N, N);
+    c.drawImage(source, 0, 0, N, N);
+    try {
+      alphaMaps[id] = { data: c.getImageData(0, 0, N, N).data, n: N };
+    } catch (e) { /* tainted canvas: fall back to hitting the whole quad */ }
+    aspects[id] = w / h;
+  }
+
+  function alphaAt(id, u, v) {
+    const m = alphaMaps[id];
+    if (!m) return 1;
+    const x = Math.min(m.n - 1, Math.max(0, Math.floor(u * m.n)));
+    const y = Math.min(m.n - 1, Math.max(0, Math.floor((1 - v) * m.n)));
+    return m.data[(y * m.n + x) * 4 + 3] / 255;
+  }
+
+  function installFallback(id, make) {
+    const cv = make();
+    textures[id] = makeTexture(id, cv, { repeat: id.startsWith("tex_") });
+    buildAlphaMap(id, cv, cv.width, cv.height);
+    return textures[id];
+  }
+
+  const installLayer = id => installFallback(id, FALLBACK[id]);
+
+  function assetURL(id) {
+    if (INLINE_ASSETS && INLINE_ASSETS[id]) return INLINE_ASSETS[id];
+    return "../assets/" + id + ".png";
+  }
+
+  // Kick every load off in parallel; each one swaps itself in when it lands.
+  function loadAssets(ids, onEach) {
+    for (const id of ids) {
+      const img = new Image();
+      img.onload = () => {
+        for (const tex of variants[id] || []) { tex.image = img; tex.needsUpdate = true; }
+        buildAlphaMap(id, img, img.naturalWidth, img.naturalHeight);
+        if (onEach) onEach(id);
+      };
+      img.onerror = () => { /* keep the procedural version */ };
+      img.src = assetURL(id);
+    }
+  }
+
+  // ── scene ───────────────────────────────────────────────────
+  const renderer = new T.WebGLRenderer({
+    canvas: glCanvas, antialias: true, alpha: false, powerPreference: "high-performance",
+  });
+  renderer.setClearColor(0x090D12, 1);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = T.PCFSoftShadowMap;
+
+  const scene = new T.Scene();
+  scene.fog = new T.Fog(0x11181F, 26, 62);
+
+  const CAM_PITCH = 0.66;                       // radians above the belt plane
+  const camera = new T.PerspectiveCamera(54, 1, 0.4, 220);
+  const camTarget = new T.Vector3(0, 1.25, 0.1);
+
+  scene.add(new T.HemisphereLight(0x7E9BB8, 0x2B3038, 1.9));
+
+  const key = new T.DirectionalLight(0xFFF0D8, 3.1);
+  key.position.set(7, 13, 6);
+  key.castShadow = true;
+  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.camera.left = -9; key.shadow.camera.right = 9;
+  key.shadow.camera.top = 9;   key.shadow.camera.bottom = -9;
+  key.shadow.camera.near = 2;  key.shadow.camera.far = 34;
+  key.shadow.bias = -0.0012;
+  scene.add(key, key.target);
+
+  // Bounce off the window wall, so the far side of the hall isn't a black hole.
+  const fill = new T.DirectionalLight(0x9FC0E0, 1.1);
+  fill.position.set(-6, 5, -9);
+  scene.add(fill);
+
+  // The claim zone gets a real light, not just a painted stripe: it is the one
+  // thing on screen the player is supposed to look at.
+  const gateLight = new T.SpotLight(0xFFB23F, 40, 11, 0.66, 0.6, 1.4);
+  gateLight.position.set(0, 4.6, RECT.h / 2 + 1.4);
+  gateLight.target.position.set(0, BELT_Y, RECT.h / 2);
+  scene.add(gateLight, gateLight.target);
+
+  // ── carousel geometry ───────────────────────────────────────
+  // A ribbon between two offset copies of the loop, at two heights. Every part
+  // of the carousel — belt, inner slope, outer skirt, lip — is one of these,
+  // which keeps the art welded to the same arclength the rules run on.
+  function ribbon(offA, yA, offB, yB, { from = 0, span = track.total, steps = 220,
+                                        vRepeat = 1, closed = true } = {}) {
+    const n = Math.max(2, Math.round(steps * (span / track.total)));
+    const pos = [], uv = [], idx = [];
+    for (let i = 0; i <= n; i++) {
+      const k = i / n;
+      const s = from + span * k;
+      const p = pointAt(s), nrm = normalAt(s);
+      pos.push(p.x + nrm.x * offA, yA, p.y + nrm.y * offA);
+      pos.push(p.x + nrm.x * offB, yB, p.y + nrm.y * offB);
+      uv.push(0, k * vRepeat, 1, k * vRepeat);
+    }
+    for (let i = 0; i < n; i++) {
+      const a = i * 2, b = a + 1, c = a + 2, d = a + 3;
+      idx.push(a, c, b, b, c, d);
+    }
+    if (closed) {
+      const a = n * 2, b = a + 1;
+      idx.push(a, 0, b, b, 0, 1);
+    }
+    const g = new T.BufferGeometry();
+    g.setAttribute("position", new T.Float32BufferAttribute(pos, 3));
+    g.setAttribute("uv", new T.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    return g;
+  }
+
+  // Flat cap for the middle of the loop, from the inner offset curve.
+  function capGeometry(off, y, steps = 220) {
+    const shape = new T.Shape();
+    for (let i = 0; i < steps; i++) {
+      const s = (track.total * i) / steps;
+      const p = pointAt(s), nrm = normalAt(s);
+      const x = p.x + nrm.x * off, z = p.y + nrm.y * off;
+      i ? shape.lineTo(x, z) : shape.moveTo(x, z);
+    }
+    shape.closePath();
+    const g = new T.ShapeGeometry(shape);
+    // ShapeGeometry is XY facing +Z; the deck is XZ facing up. Rotating the
+    // other way would land the positions correctly but leave the normal
+    // pointing at the floor, and the island would render unlit. The loop is
+    // symmetric about z, so the mirror this introduces is invisible.
+    g.rotateX(-Math.PI / 2);
+    g.translate(0, y, 0);
+    return g;
+  }
+
+  const carousel = new T.Group();
+  scene.add(carousel);
+
+  installLayer("tex_belt_slats");
+  installLayer("tex_steel");
+  installLayer("tex_floor");
+
+  // Belt. UV.v runs along the loop, so scrolling the texture offset moves the
+  // rubber at exactly the speed the bags move — the belt reads as carrying them.
+  const SLAT_PITCH = 0.34;
+  const beltTex = textures.tex_belt_slats;
+  beltTex.repeat.set(1, track.total / SLAT_PITCH);
+  const beltMat = new T.MeshStandardMaterial({
+    map: beltTex, roughness: 0.94, metalness: 0.0, color: 0x8C97A4,
+  });
+  const belt = new T.Mesh(
+    ribbon(-BELT_W / 2, BELT_Y, BELT_W / 2, BELT_Y, { vRepeat: 1 }), beltMat);
+  belt.receiveShadow = true;
+  carousel.add(belt);
+
+  const steelTex = textures.tex_steel;
+  steelTex.repeat.set(3, 14);
+  const steelMat = new T.MeshStandardMaterial({
+    map: steelTex, roughness: 0.42, metalness: 0.72, color: 0xA8B0BA,
+  });
+  const darkMat = new T.MeshStandardMaterial({ color: 0x161C24, roughness: 0.85 });
+
+  // Inner slope up to the central island, then the island top.
+  const slope = new T.Mesh(
+    ribbon(-BELT_W / 2, BELT_Y, -BELT_W / 2 - 0.95, BELT_Y + 0.62, { vRepeat: 10 }), steelMat);
+  slope.castShadow = slope.receiveShadow = true;
+  carousel.add(slope);
+
+  // ShapeGeometry uses raw world coordinates as UVs, so the island needs its
+  // own tiling rather than the skirt's — otherwise the grain smears to mush.
+  const islandMat = new T.MeshStandardMaterial({
+    map: variant("tex_steel", 0.22, 0.22), roughness: 0.5, metalness: 0.6, color: 0x99A2AE,
+  });
+  const island = new T.Mesh(capGeometry(-BELT_W / 2 - 0.95, BELT_Y + 0.62), islandMat);
+  island.receiveShadow = true;
+  carousel.add(island);
+
+  // Outer skirt down to the floor, plus the black rubber lip along the top edge.
+  const skirt = new T.Mesh(
+    ribbon(BELT_W / 2 + 0.14, BELT_Y - 0.04, BELT_W / 2 + 0.62, 0, { vRepeat: 10 }), steelMat);
+  skirt.castShadow = skirt.receiveShadow = true;
+  carousel.add(skirt);
+
+  const lip = new T.Mesh(
+    ribbon(BELT_W / 2, BELT_Y + 0.055, BELT_W / 2 + 0.14, BELT_Y - 0.04, { vRepeat: 1 }), darkMat);
+  lip.castShadow = true;
+  carousel.add(lip);
+
+  // Claim zone: an additive band laid a millimetre over the belt.
+  const gateMat = new T.MeshBasicMaterial({
+    color: 0xFFB23F, transparent: true, opacity: 0.14,
+    blending: T.AdditiveBlending, depthWrite: false,
+  });
+  const gateBand = new T.Mesh(
+    ribbon(-BELT_W / 2, BELT_Y + 0.012, BELT_W / 2, BELT_Y + 0.012,
+           { from: gate.a, span: track.total * GATE_SPAN, closed: false }), gateMat);
+  carousel.add(gateBand);
+
+  // ── hall ────────────────────────────────────────────────────
+  const floorTex = textures.tex_floor;
+  floorTex.repeat.set(12, 12);
+  const floor = new T.Mesh(
+    new T.PlaneGeometry(70, 48),
+    new T.MeshStandardMaterial({ map: floorTex, roughness: 0.6, metalness: 0.05, color: 0x9AA3AE }));
+  floor.rotation.x = -Math.PI / 2;
+  // Stops at the wall. Run it past and you see terminal floor through the
+  // window instead of the apron, which is what the first build did.
+  floor.position.z = WALL_Z + 24;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  // The wall is built as a frame around a window rather than as one slab: the
+  // window is what makes the apron animation visible, and the wall is what
+  // hides the far run of the belt so the next bag is a memory problem.
+  // The sill is set in world units, not as a fraction of the screen. It has to
+  // clear the tallest thing on the belt: put it any lower and bags on the far
+  // run show through the glazing instead of vanishing into the hall. The wall
+  // runs far past the viewport in every direction so no aspect exposes an edge.
+  const wallMat = new T.MeshStandardMaterial({ color: 0x2A333F, roughness: 0.92 });
+  const WIN = { x0: -13, x1: 13, y0: 2.4, y1: 13.4 };
+  function wallSlab(x0, x1, y0, y1) {
+    const m = new T.Mesh(new T.BoxGeometry(x1 - x0, y1 - y0, 0.34), wallMat);
+    m.position.set((x0 + x1) / 2, (y0 + y1) / 2, WALL_Z - 0.17);
+    m.castShadow = m.receiveShadow = true;
+    scene.add(m);
+  }
+  wallSlab(-30, 30, -2, WIN.y0);
+  wallSlab(-30, 30, WIN.y1, 34);
+  wallSlab(-30, WIN.x0, WIN.y0, WIN.y1);
+  wallSlab(WIN.x1, 30, WIN.y0, WIN.y1);
+
+  // Mullions, so the opening reads as glazing rather than a hole in the wall.
+  const mullionMat = new T.MeshStandardMaterial({ color: 0x141A21, roughness: 0.8 });
+  for (const x of [-8.6, -4.3, 0, 4.3, 8.6]) {
+    const m = new T.Mesh(new T.BoxGeometry(0.17, WIN.y1 - WIN.y0, 0.22), mullionMat);
+    m.position.set(x, (WIN.y0 + WIN.y1) / 2, WALL_Z - 0.04);
+    scene.add(m);
+  }
+
+  // Strip curtains where the belt crosses into the hall. Found by walking the
+  // loop rather than solved for, so they stay put if the loop shape changes.
+  // Not children of the wall: they belong to the belt's height, not the sill's.
+  installLayer("spr_strip_curtain");
+  const curtainMat = new T.MeshBasicMaterial({
+    map: textures.spr_strip_curtain, transparent: true, depthWrite: false, side: T.DoubleSide,
+  });
+  for (const dir of [1, -1]) {
+    let found = null;
+    for (let i = 0; i < 600; i++) {
+      const s = (track.total * i) / 600;
+      const p = pointAt(s);
+      if (Math.sign(p.x) === dir && Math.abs(p.y - WALL_Z) < 0.05) { found = p; break; }
+    }
+    if (!found) continue;
+    const m = new T.Mesh(new T.PlaneGeometry(2.1, 1.4), curtainMat);
+    m.position.set(found.x, BELT_Y + 0.62, WALL_Z + 0.03);
+    scene.add(m);
+  }
+
+  // ── the view out the window ─────────────────────────────────
+  // A painted backdrop a few units behind the glass, not a real outdoor scene.
+  // The camera looks down at the belt, so anything genuinely far away sits
+  // above the top of the frame and is never seen; stacking the layers at almost
+  // the same depth puts the horizon exactly where the composition wants it.
+  // Y is measured from the horizon, and the group is slid to place it.
+  const BACKDROP_Z = -15.2;
+  const outside = new T.Group();
+  scene.add(outside);
+
+  function billboard(id, w, h, x, y, z, { transparent = false, order = 0 } = {}) {
+    installLayer(id);
+    const mat = new T.MeshBasicMaterial({
+      map: textures[id], transparent, depthWrite: false, depthTest: false, fog: false,
+    });
+    const m = new T.Mesh(new T.PlaneGeometry(w, h), mat);
+    m.position.set(x, y, z);
+    m.renderOrder = -100 + order;   // painter's order; depth is decorative here
+    outside.add(m);
+    return m;
+  }
+
+  billboard("bg_sky",     58, 34,  0,  13,  BACKDROP_Z - 0.8, { order: 0 });
+  billboard("bg_skyline", 52, 11,  0,  3.1, BACKDROP_Z - 0.5, { order: 1, transparent: true });
+  billboard("bg_apron",   52, 17,  0, -7.4, BACKDROP_Z - 0.2, { order: 2 });
+
+  const plane = billboard("spr_plane", 11, 3.4, -26, -0.5, BACKDROP_Z, { order: 3, transparent: true });
+  const vehicles = [
+    { mesh: billboard("spr_taxi", 2.9, 1.45, -18, -1.7, BACKDROP_Z + 0.1, { order: 4, transparent: true }), speed: 3.6, dir: 1 },
+    { mesh: billboard("spr_tug",  4.0, 1.6,   20, -2.4, BACKDROP_Z + 0.2, { order: 5, transparent: true }), speed: 2.3, dir: -1 },
+    { mesh: billboard("spr_taxi", 2.9, 1.45,   8, -3.1, BACKDROP_Z + 0.3, { order: 6, transparent: true }), speed: 5.0, dir: -1 },
+  ];
+  for (const v of vehicles) if (v.dir < 0) v.mesh.scale.x = -1;
+
+  // The horizon is placed relative to where the window sill lands on screen,
+  // not at a fixed fraction of it. The sill is fixed in world units, so its
+  // screen position moves with the camera distance the aspect ratio forces —
+  // pinning the horizon absolutely would slide it behind the wall on a tall
+  // viewport and above the frame on a squat one.
+  const HORIZON_OF_SILL = 0.45;
+  const alignRay = new T.Raycaster();
+  const horizonPlane = new T.Plane(new T.Vector3(0, 0, 1), -BACKDROP_Z);
+  const hitPoint = new T.Vector3();
+  const sillPoint = new T.Vector3();
+  function alignBackdrop() {
+    sillPoint.set(0, WIN.y0, WALL_Z).project(camera);
+    const sillDown = (1 - sillPoint.y) / 2;            // 0 at the top of the frame
+    const at = Math.max(0.02, sillDown * HORIZON_OF_SILL);
+    alignRay.setFromCamera(new T.Vector2(0, 1 - 2 * at), camera);
+    if (alignRay.ray.intersectPlane(horizonPlane, hitPoint)) outside.position.y = hitPoint.y;
+  }
+
+  // Takeoff runs on its own clock: roll in from the left, rotate, climb away
+  // behind the window head.
+  const takeoff = { t: 0, period: 24, run: 10 };
+
+  function animateOutside(dt) {
+    for (const v of vehicles) {
+      v.mesh.position.x += v.speed * v.dir * dt;
+      if (v.dir > 0 && v.mesh.position.x > 26) v.mesh.position.x = -26;
+      if (v.dir < 0 && v.mesh.position.x < -26) v.mesh.position.x = 26;
+    }
+
+    takeoff.t = (takeoff.t + dt) % takeoff.period;
+    const k = takeoff.t / takeoff.run;
+    if (k > 1) { plane.visible = false; return; }
+    plane.visible = true;
+    // Ground roll for the first 55%, then rotate and climb out of the window.
+    const lift = Math.max(0, (k - 0.55) / 0.45);
+    plane.position.x = -26 + k * 54;
+    plane.position.y = -0.5 + lift * lift * 11;
+    plane.rotation.z = lift * 0.2;
+    plane.scale.setScalar(1 - lift * 0.18);
+  }
+
+  // ── bags in the scene ───────────────────────────────────────
+  TYPES.forEach((t, i) => installFallback(t.art, () => FALLBACK.bag(i)));
+
+  const bagGeo = new T.PlaneGeometry(1, 1);
+  const shadowTex = (() => {
+    const { cv, c } = surface(64, 64);
+    // Billboards can't cast a real shadow, and without one they read as
+    // floating above the belt rather than riding it.
+    const g = c.createRadialGradient(32, 32, 2, 32, 32, 31);
+    g.addColorStop(0, "rgba(0,0,0,.92)");
+    g.addColorStop(0.45, "rgba(0,0,0,.55)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    c.fillStyle = g; c.fillRect(0, 0, 64, 64);
+    return makeTexture("_shadow", cv);
+  })();
+  const shadowGeo = new T.PlaneGeometry(1, 1);
+
+  // Two materials per type. Out of reach reads as dimmed, and swapping the
+  // material is free where tinting a shared one would dim the whole belt.
+  const bagMats = TYPES.map(t => ({
+    lit: new T.MeshBasicMaterial({ map: textures[t.art], transparent: true, alphaTest: 0.35 }),
+    dim: new T.MeshBasicMaterial({
+      map: textures[t.art], transparent: true, alphaTest: 0.35,
+      color: 0x8B94A0, opacity: 0.9,
+    }),
+  }));
+
+  const bagPool = [];
+  function bagSlot(i) {
+    if (!bagPool[i]) {
+      const mesh = new T.Mesh(bagGeo, bagMats[0].lit);
+      const shade = new T.Mesh(shadowGeo, new T.MeshBasicMaterial({
+        map: shadowTex, transparent: true, depthWrite: false, opacity: 0.7,
+      }));
+      shade.rotation.x = -Math.PI / 2;
+      scene.add(mesh, shade);
+      bagPool[i] = { mesh, shade };
+    }
+    return bagPool[i];
+  }
+
+  const upVec = new T.Vector3();
+  function syncBags() {
+    for (let i = 0; i < S.bags.length; i++) {
+      const b = S.bags[i];
+      const slot = bagSlot(i);
+      const p = pointAt(b.s);
+      const type = b.type;
+      const w = S.tile * widthOf(type);
+      const h = w / (aspects[TYPES[type].art] || widthOf(type));
+
+      slot.mesh.material = inGate(b.s) ? bagMats[type].lit : bagMats[type].dim;
+      slot.mesh.scale.set(w, h, 1);
+      slot.mesh.quaternion.copy(camera.quaternion);
+      // Billboards pivot at their centre; lift by half a height along the
+      // billboard's own up so the bag's base sits on the belt, not through it.
+      upVec.set(0, 1, 0).applyQuaternion(camera.quaternion);
+      slot.mesh.position.set(p.x, BELT_Y, p.y).addScaledVector(upVec, h / 2);
+      slot.mesh.userData.bag = i;
+      slot.mesh.visible = true;
+
+      slot.shade.position.set(p.x, BELT_Y + 0.008, p.y);
+      slot.shade.scale.set(w * 1.15, h * 0.75, 1);
+      slot.shade.visible = true;
+    }
+    for (let i = S.bags.length; i < bagPool.length; i++) {
+      bagPool[i].mesh.visible = false;
+      bagPool[i].shade.visible = false;
+    }
+  }
+
+  // ── level generation ────────────────────────────────────────
+  function startLevel(n) {
+    // Reach the full type set by level 5. Below 4 types a jam is arithmetically
+    // impossible — you can hold two of each and still never fill seven slots —
+    // so anything slower than this hands out unloseable levels.
+    const typeCount = Math.min(SMALL.length, 2 + n);
+    const pool = SMALL.slice(0, typeCount);
+    if (n >= 3) pool.push(...BIG.slice(0, Math.min(BIG.length, Math.floor(n / 3))));
+
+    S.speed = Math.min(1.76, 0.77 + n * 0.08);
+
+    // Draw the level, then drop a set at a time until the belt can carry it at
+    // a readable size.
+    let types = [];
+    for (let triples = Math.min(11, 4 + n); triples >= 2; triples--) {
+      types = [];
+      for (let i = 0; i < triples; i++) {
+        const t = pool[(Math.random() * pool.length) | 0];
+        types.push(t, t, t);
+      }
+      if (fitsLegibly(types)) break;
+    }
+    for (let i = types.length - 1; i > 0; i--) {          // spread matching sets
+      const j = (Math.random() * (i + 1)) | 0;
+      [types[i], types[j]] = [types[j], types[i]];
+    }
+
+    S.bags = placeBags(types);
+
+    S.tray = [];
+    S.particles = [];
+    S.returns = RETURNS;
+    S.combo = 0;
+    S.comboTimer = 0;
+    S.level = n;
+    S.levelStartScore = S.score;
+    // Enough laps to clear the belt playing well, not enough to dither.
+    S.timeLeft = (track.total / S.speed) * (2.0 + S.bags.length / 10);
+    S.phase = "playing";
+    syncHud();
+  }
+
+  // ── tray ────────────────────────────────────────────────────
+  const unitsUsed = () => S.tray.reduce((a, it) => a + TYPES[it.type].size, 0);
+  const anyFlying = () => S.tray.some(it => it.fly);
+
+  function slotCenter(index) {
+    let u = 0;
+    for (let i = 0; i < index; i++) u += TYPES[S.tray[i].type].size;
+    const size = TYPES[S.tray[index].type].size;
+    const span = size * trayBox.slotW + (size - 1) * trayBox.gap;
+    return {
+      x: trayBox.x + u * (trayBox.slotW + trayBox.gap) + span / 2,
+      y: trayBox.y + trayBox.h / 2,
+    };
+  }
+
+  // The flight to the tray happens in 2D, so a claimed bag needs its 3D
+  // position as pixels on the overlay.
+  const projV = new T.Vector3();
+  function toScreen(x, y, z) {
+    projV.set(x, y, z).project(camera);
+    return { x: (projV.x * 0.5 + 0.5) * W, y: (-projV.y * 0.5 + 0.5) * H };
+  }
+
+  function claim(bagIndex) {
+    const bag = S.bags[bagIndex];
+    const size = TYPES[bag.type].size;
+    if (unitsUsed() + size > CAP) { S.shake = REDUCED ? 0 : 5; beep("no"); return; }
+
+    const p = pointAt(bag.s);
+    const scr = toScreen(p.x, BELT_Y + S.tile * 0.5, p.y);
+    S.bags.splice(bagIndex, 1);
+
+    let at = S.tray.length;                    // group with its own kind
+    for (let i = S.tray.length - 1; i >= 0; i--) {
+      if (S.tray[i].type === bag.type) { at = i + 1; break; }
+    }
+    S.tray.splice(at, 0, { type: bag.type, fly: { x: scr.x, y: scr.y, t: 0 } });
+    beep("pick");
+  }
+
+  function resolve() {
+    const counts = new Map();
+    for (const it of S.tray) counts.set(it.type, (counts.get(it.type) || 0) + 1);
+
+    for (const [type, n] of counts) {
+      if (n < 3) continue;
+      let left = 3;
+      for (let i = 0; i < S.tray.length && left > 0; i++) {
+        if (S.tray[i].type === type) {
+          burst(slotCenter(i), TYPES[type].c);
+          S.tray.splice(i, 1);
+          i--; left--;
+        }
+      }
+      S.combo = Math.min(S.combo + 1, MULTS.length - 1);
+      S.comboTimer = COMBO_WINDOW;
+      const mult = MULTS[S.combo];
+      S.score += 100 * mult * TYPES[type].size;
+      S.bestCombo = Math.max(S.bestCombo, mult);
+      if (!REDUCED) S.shake = 3;
+      beep("pop", S.combo);
+      syncHud();
+    }
+  }
+
+  function checkEnd() {
+    if (anyFlying() || S.phase !== "playing") return;
+
+    if (!S.bags.length && !S.tray.length) { S.phase = "won"; showOverlay("won"); return; }
+
+    const used = unitsUsed();
+    if (used >= CAP) { S.phase = "lost"; showOverlay("lost"); return; }
+
+    if (S.bags.length) {
+      const smallest = Math.min(...S.bags.map(b => TYPES[b.type].size));
+      if (used + smallest > CAP) { S.phase = "lost"; showOverlay("lost"); }
+    } else {
+      S.phase = "lost"; showOverlay("lost");   // belt empty, tray can never clear
+    }
+  }
+
+  function returnBag() {
+    if (S.phase !== "playing" || S.returns <= 0 || !S.tray.length || anyFlying()) return;
+    const it = S.tray.pop();
+    S.bags.push({ type: it.type, s: (S.beltPhase + track.total * 0.5) % track.total });
+    S.returns--;
+    S.combo = 0;
+    syncHud();
+    beep("return");
+  }
+
+  // ── particles ───────────────────────────────────────────────
+  function burst(p, color) {
+    if (REDUCED) return;
+    for (let i = 0; i < 12; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const v = 60 + Math.random() * 150;
+      S.particles.push({
+        x: p.x, y: p.y,
+        vx: Math.cos(a) * v, vy: Math.sin(a) * v - 70,
+        life: 0.5 + Math.random() * 0.3, age: 0, color,
+      });
+    }
+  }
+
+  // ── audio ───────────────────────────────────────────────────
+  let ac = null, muted = false;
+  function beep(kind, n = 0) {
+    if (muted) return;
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      if (ac.state === "suspended") ac.resume();
+      const t = ac.currentTime;
+      const notes = kind === "pop"    ? [523.25 + n * 62, 784 + n * 62]
+                  : kind === "pick"   ? [330]
+                  : kind === "return" ? [262]
+                  : [110];
+      notes.forEach((f, i) => {
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.type = kind === "no" ? "square" : "triangle";
+        o.frequency.value = f;
+        const t0 = t + i * 0.06;
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(kind === "pop" ? 0.16 : 0.07, t0 + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+        o.connect(g); g.connect(ac.destination);
+        o.start(t0); o.stop(t0 + 0.24);
+      });
+    } catch (e) { /* audio is a nicety, never a blocker */ }
+  }
+
+  // ── input ───────────────────────────────────────────────────
+  const raycaster = new T.Raycaster();
+  const ndc = new T.Vector2();
+
+  function tap(clientX, clientY) {
+    if (S.phase !== "playing") return;
+    const r = uiCanvas.getBoundingClientRect();
+    ndc.x = ((clientX - r.left) / r.width) * 2 - 1;
+    ndc.y = -((clientY - r.top) / r.height) * 2 + 1;
+    raycaster.setFromCamera(ndc, camera);
+
+    const meshes = bagPool.slice(0, S.bags.length).map(s => s.mesh);
+    const hits = raycaster.intersectObjects(meshes, false);
+
+    let sawOutOfReach = false;
+    for (const hit of hits) {                 // nearest first
+      const i = hit.object.userData.bag;
+      const bag = S.bags[i];
+      if (!bag) continue;
+      // Transparent corners are not the bag. Let the tap fall through to
+      // whatever is behind, rather than eating it.
+      if (hit.uv && alphaAt(TYPES[bag.type].art, hit.uv.x, hit.uv.y) < 0.35) continue;
+      if (inHall(bag.s)) continue;
+      if (!inGate(bag.s)) { sawOutOfReach = true; continue; }
+      claim(i);
+      return;
+    }
+    if (sawOutOfReach) S.gateFlash = 0.55;    // teach, don't punish
+  }
+
+  uiCanvas.addEventListener("pointerdown", e => { e.preventDefault(); tap(e.clientX, e.clientY); });
+  uiCanvas.addEventListener("contextmenu", e => e.preventDefault());
+  btnReturn.addEventListener("click", returnBag);
+  btnSound.addEventListener("click", () => {
+    muted = !muted;
+    btnSound.textContent = muted ? "✕" : "♫";
+    btnSound.setAttribute("aria-label", muted ? "Unmute sound" : "Mute sound");
+  });
+
+  // Start on a tap anywhere on the card, through whichever event the host
+  // delivers first. Debounced so click-after-touchend can't double-fire.
+  let lastStart = 0;
+  function start() {
+    const now = Date.now();
+    if (now - lastStart < 400 || overlay.hidden) return;
+    lastStart = now;
+    try {
+      overlay.hidden = true;
+      if (S.phase === "won") startLevel(S.level + 1);
+      else if (S.phase === "lost") { S.score = S.levelStartScore; startLevel(S.level); }
+      else startLevel(1);
+    } catch (err) {
+      fail(err);
+    }
+  }
+  overlay.addEventListener("click", start);
+  overlay.addEventListener("touchend", e => { e.preventDefault(); start(); });
+  btnGo.addEventListener("click", e => { e.stopPropagation(); start(); });
+
+  // ── hud / overlay ───────────────────────────────────────────
+  function syncHud() {
+    hudLevel.textContent = String(S.level).padStart(2, "0");
+    hudScore.textContent = S.score.toLocaleString("en-US");
+    const secs = Math.max(0, Math.ceil(S.timeLeft));
+    hudTime.textContent = Math.floor(secs / 60) + ":" + String(secs % 60).padStart(2, "0");
+    hudTime.classList.toggle("is-low", secs <= 15);
+    const m = MULTS[S.combo];
+    hudCombo.textContent = "×" + m;
+    hudCombo.classList.toggle("is-hot", m > 1);
+    returnCt.textContent = S.returns;
+    btnReturn.disabled = S.returns <= 0 || S.tray.length === 0;
+  }
+
+  function showOverlay(kind) {
+    ovStats.hidden = false;
+    ovScore.textContent = S.score.toLocaleString("en-US");
+    ovBest.textContent = "×" + S.bestCombo;
+    if (kind === "won") {
+      ovEyebrow.textContent = "Belt cleared";
+      ovTitle.textContent = "ALL CLAIMED";
+      ovBlurb.innerHTML = "Belt <em>" + String(S.level + 1).padStart(2, "0") +
+        "</em> runs faster and carries more.";
+      btnGo.textContent = "Next belt";
+    } else if (kind === "time") {
+      ovEyebrow.textContent = "Flight boarded";
+      ovTitle.textContent = "TOO SLOW";
+      ovBlurb.innerHTML = "Waiting for the perfect bag costs a whole lap. <em>Take the ones you can use.</em>";
+      btnGo.textContent = "Retry belt " + String(S.level).padStart(2, "0");
+    } else {
+      ovEyebrow.textContent = "Tray jammed";
+      ovTitle.textContent = "NO ROOM";
+      ovBlurb.innerHTML = "Seven slots, no match. Be choosier about what you let into the tray.";
+      btnGo.textContent = "Retry belt " + String(S.level).padStart(2, "0");
+    }
+    overlay.hidden = false;
+  }
+
+  // ── the 2D layer: tray, manifest, particles ─────────────────
+  function drawSprite(cx, cy, type, height) {
+    const art = TYPES[type].art;
+    const tex = textures[art];
+    const src = tex && tex.image;
+    const aspect = aspects[art] || widthOf(type);
+    const w = height * aspect, h = height;
+    if (src) ctx.drawImage(src, cx - w / 2, cy - h / 2, w, h);
+  }
+
+  // The arrivals board on the carousel island: what's still out there, by type.
+  // Drawn in 2D at the island's projected position so it stays legible instead
+  // of foreshortening away with the deck.
+  function drawManifest() {
+    const counts = new Map();
+    for (const b of S.bags) counts.set(b.type, (counts.get(b.type) || 0) + 1);
+    if (!counts.size) return;
+
+    const rows = [...counts.entries()].sort((a, b) => a[0] - b[0]);
+    const at = toScreen(0, BELT_Y + 0.64, -0.1);
+    const rowH = 20, sw = 22, sh = 16;
+    const blockH = rows.length * rowH;
+    let ry = at.y - blockH / 2 + rowH / 2;
+    if (at.y - blockH / 2 < 26) return;              // no room to read it
+
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "rgba(255,178,63,.5)";
+    ctx.font = '700 9px "Helvetica Neue", Helvetica, Arial, sans-serif';
+    ctx.textAlign = "center";
+    ctx.letterSpacing = "3px";
+    ctx.fillText("ON THE BELT", at.x, ry - rowH * 0.95);
+    ctx.letterSpacing = "0px";
+
+    for (const [type, n] of rows) {
+      const t = TYPES[type];
+      ctx.globalAlpha = 0.62;
+      ctx.fillStyle = t.c;
+      roundRectPath(ctx, at.x - sw - 9, ry - sh / 2, sw, sh, 3);
+      ctx.fill();
+      ctx.save();
+      roundRectPath(ctx, at.x - sw - 9, ry - sh / 2, sw, sh, 3);
+      ctx.clip();
+      ctx.translate(at.x - sw / 2 - 9, ry);
+      ctx.fillStyle = "rgba(10,14,19,.45)";
+      MOTIF[t.m](ctx, sw, sh);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+
+      ctx.fillStyle = n <= 2 ? "rgba(255,178,63,.72)" : "rgba(121,131,143,.62)";
+      ctx.font = "13px ui-monospace, SFMono-Regular, Menlo, monospace";
+      ctx.textAlign = "left";
+      ctx.fillText(String(n), at.x + 2, ry + 0.5);
+      ry += rowH;
+    }
+  }
+
+  function drawTray() {
+    const { x, y, w, h, slotW, gap } = trayBox;
+
+    ctx.fillStyle = "rgba(9,13,18,.86)";
+    roundRectPath(ctx, x - 8, y - 9, w + 16, h + 18, 6);
+    ctx.fill();
+
+    ctx.strokeStyle = "#212A34";
+    ctx.lineWidth = 1;
+    for (let i = 0; i < CAP; i++) {
+      roundRectPath(ctx, x + i * (slotW + gap), y, slotW, h, 4);
+      ctx.stroke();
+    }
+
+    const used = unitsUsed();               // pressure reads before you count
+    if (used >= CAP - 2) {
+      ctx.strokeStyle = used >= CAP - 1 ? "rgba(255,107,94,.85)" : "rgba(255,178,63,.55)";
+      ctx.lineWidth = 2;
+      roundRectPath(ctx, x - 8, y - 9, w + 16, h + 18, 6);
+      ctx.stroke();
+    }
+
+    const height = h - 12;
+    for (let i = 0; i < S.tray.length; i++) {
+      const it = S.tray[i];
+      const c = slotCenter(i);
+      if (it.fly) {
+        const k = 1 - Math.pow(1 - it.fly.t, 3);
+        const mx = (it.fly.x + c.x) / 2, my = Math.min(it.fly.y, c.y) - 50;
+        const px = (1 - k) * (1 - k) * it.fly.x + 2 * (1 - k) * k * mx + k * k * c.x;
+        const py = (1 - k) * (1 - k) * it.fly.y + 2 * (1 - k) * k * my + k * k * c.y;
+        drawSprite(px, py, it.type, height * (1.4 - 0.4 * k));
+      } else {
+        drawSprite(c.x, c.y, it.type, height);
+      }
+    }
+  }
+
+  function drawUI() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.save();
+    if (S.shake > 0) {
+      ctx.translate((Math.random() - 0.5) * S.shake, (Math.random() - 0.5) * S.shake);
+    }
+
+    drawManifest();
+
+    for (const p of S.particles) {
+      ctx.globalAlpha = Math.max(0, 1 - p.age / p.life);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x - 3, p.y - 3, 6, 6);
+    }
+    ctx.globalAlpha = 1;
+
+    drawTray();
+    ctx.restore();
+  }
+
+  // ── loop ────────────────────────────────────────────────────
+  let last = 0;
+  function frame(ts) {
+    try { step(ts); } catch (err) { fail(err); return; }   // never die silently
+    requestAnimationFrame(frame);
+  }
+
+  function step(ts) {
+    const dt = Math.min(0.05, (ts - last) / 1000 || 0);
+    last = ts;
+    S.clock += dt;
+
+    const speed = S.frozen ? 0 : S.phase === "playing" ? S.speed : 0.42;
+    S.beltPhase = (S.beltPhase + speed * dt) % track.total;
+    for (const b of S.bags) b.s = (b.s + speed * dt) % track.total;
+
+    // Scroll the rubber exactly as far as the bags moved.
+    beltTex.offset.y = -(S.beltPhase / track.total) * beltTex.repeat.y;
+
+    if (S.gateFlash > 0) S.gateFlash = Math.max(0, S.gateFlash - dt * 1.8);
+    gateMat.opacity = 0.12 + S.gateFlash * 0.5 + Math.sin(S.clock * 2.2) * 0.02;
+    gateLight.intensity = 22 + S.gateFlash * 44;
+
+    animateOutside(dt);
+
+    if (S.phase === "playing") {
+      S.timeLeft -= dt;
+      if (S.timeLeft <= 0) {
+        S.timeLeft = 0;
+        S.phase = "lost";
+        showOverlay("time");
+      }
+      syncHud();
+      if (S.comboTimer > 0) {
+        S.comboTimer -= dt;
+        if (S.comboTimer <= 0 && S.combo > 0) { S.combo = 0; syncHud(); }
+      }
+      let landed = false;
+      for (const it of S.tray) {
+        if (!it.fly) continue;
+        it.fly.t += dt / FLY_TIME;
+        if (it.fly.t >= 1) { it.fly = null; landed = true; }
+      }
+      if (landed && !anyFlying()) { resolve(); checkEnd(); }
+    }
+
+    for (let i = S.particles.length - 1; i >= 0; i--) {
+      const p = S.particles[i];
+      p.age += dt;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 520 * dt;
+      if (p.age >= p.life) S.particles.splice(i, 1);
+    }
+    if (S.shake > 0) S.shake = Math.max(0, S.shake - dt * 22);
+
+    placeCamera();
+    syncBags();
+    renderer.render(scene, camera);
+    drawUI();
+  }
+
+  // ── camera ──────────────────────────────────────────────────
+  // Fit the carousel's real half-extents rather than a bounding sphere: the
+  // sphere over-fits vertically and pushes a portrait phone so far back that
+  // the camera ends up above the wall, looking into nothing.
+  const FIT_X = RECT.w / 2 + 0.85;
+  const FIT_Z = RECT.h / 2 + 0.85;
+  // The tray is drawn over the bottom of the stage, and the claim zone is the
+  // nearest part of the loop — fit to the whole stage and the one stretch of
+  // belt the player is allowed to touch ends up underneath the tray.
+  const BOTTOM_RESERVE = 0.17;
+  function placeCamera() {
+    const shakeX = S.shake > 0 ? (Math.random() - 0.5) * S.shake * 0.006 : 0;
+    const shakeY = S.shake > 0 ? (Math.random() - 0.5) * S.shake * 0.006 : 0;
+    const vFov = (camera.fov * Math.PI) / 180;
+    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
+    // Depth foreshortens into screen height, so the vertical requirement is the
+    // loop's depth laid down by the pitch, plus headroom for a standing bag —
+    // fitted into the part of the frame the tray does not cover.
+    const dist = Math.max(
+      FIT_X / Math.tan(hFov / 2),
+      (FIT_Z * Math.sin(CAM_PITCH) + 1.5) / Math.tan((vFov / 2) * (1 - BOTTOM_RESERVE)));
+
+    camera.position.set(
+      camTarget.x + shakeX,
+      camTarget.y + Math.sin(CAM_PITCH) * dist + shakeY,
+      camTarget.z + Math.cos(CAM_PITCH) * dist);
+    camera.lookAt(camTarget);
+    // Then tip the view down, which slides the whole hall up the screen and
+    // parks the reserved band under the tray instead of over the belt.
+    camera.rotateX(-(BOTTOM_RESERVE / 2) * vFov);
+    camera.updateMatrixWorld();
+  }
+
+  // ── boot ────────────────────────────────────────────────────
+  function resize() {
+    const r = stageEl.getBoundingClientRect();
+    // Embedded hosts can measure zero before their first layout pass. Fall back
+    // to a sane board rather than leaving the game without a stage.
+    W = Math.max(240, r.width || stageEl.clientWidth || 360);
+    H = Math.max(280, r.height || stageEl.clientHeight || 520);
+    DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+
+    renderer.setPixelRatio(DPR);
+    renderer.setSize(W, H, false);
+    camera.aspect = W / H;
+    camera.updateProjectionMatrix();
+    placeCamera();
+    alignBackdrop();
+
+    uiCanvas.width = Math.round(W * DPR);
+    uiCanvas.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+    const trayH = Math.min(96, Math.max(70, H * 0.16));
+    trayBox.gap = 6;
+    trayBox.x = 14;
+    trayBox.w = W - 28;
+    trayBox.h = trayH - 26;
+    trayBox.y = H - trayH + 10;
+    trayBox.slotW = (trayBox.w - trayBox.gap * (CAP - 1)) / CAP;
+  }
+
+  // A dead Start button tells you nothing. If boot fails, say so on the card.
+  function fail(err) {
+    ovEyebrow.textContent = "Prototype error";
+    ovTitle.textContent = "SNAG";
+    ovBlurb.textContent = String((err && err.message) || err);
+    ovStats.hidden = true;
+    btnGo.textContent = "Reload";
+    btnGo.onclick = () => location.reload();
+    overlay.hidden = false;
+  }
+
+  // A seam for driving the game from a script — used by the headless render
+  // check, and handy for tuning the camera without rebuilding. Everything the
+  // game itself needs lives in the closure; this only reads it.
+  window.__probe = {
+    state: S,
+    camera,
+    freeze(on) { S.frozen = !!on; },
+    trayCount: () => S.tray.length,
+    // Where an in-gate, claimable bag currently is in CSS pixels.
+    gateBagScreenPos() {
+      const r = uiCanvas.getBoundingClientRect();
+      for (let i = 0; i < S.bags.length; i++) {
+        const b = S.bags[i];
+        if (!inGate(b.s) || inHall(b.s)) continue;
+        // The sprite's own centre, not a guess at it: the billboard is lifted
+        // along the camera's up vector, which is not world up.
+        const c = bagPool[i].mesh.position;
+        const scr = toScreen(c.x, c.y, c.z);
+        return { x: r.left + scr.x, y: r.top + scr.y, bag: i, type: b.type };
+      }
+      return null;
+    },
+  };
+
+  try {
+    new ResizeObserver(resize).observe(stageEl);
+    addEventListener("resize", resize);
+    resize();
+    requestAnimationFrame(resize);               // re-measure after first paint
+
+    loadAssets(Object.keys(FALLBACK).filter(k => k !== "bag")
+      .concat(TYPES.map(t => t.art)));
+
+    // A belt idles behind the title card. If it is moving, the game is alive.
+    S.bags = placeBags(Array.from({ length: 14 }, (_, i) => SMALL[i % 5]));
+    syncHud();
+    requestAnimationFrame(frame);
+  } catch (err) {
+    fail(err);
+  }
+})();
+</script>
