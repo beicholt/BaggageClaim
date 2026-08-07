@@ -1,0 +1,97 @@
+{
+  "model": "gemini-2.5-flash-image",
+  "outDir": "assets",
+
+  "styles": {
+    "sprite": "Single video-game sprite asset. Clean stylized 3D render, soft neutral studio lighting, matte materials, gentle ambient occlusion, no blown-out speculars. Fixed camera: high three-quarter view, about 55 degrees above the horizon, looking down at the object. The object is centred, fills roughly 85% of the frame, and is completely isolated on a flat, uniform, pure saturated green (#00FF00) background. Absolutely no cast shadow, no ground plane, no reflection, no vignette, no text, no watermark, no logo, no brand mark, no packaging. Bold chunky silhouette with strong internal value contrast — this asset is displayed at roughly 48 pixels tall, so no fine detail, no thin lines, no small text, no busy texture.",
+
+    "tile": "Seamlessly tileable texture swatch, flat orthographic top-down view, perfectly even lighting edge to edge, no vignette, no directional shadow, no perspective. The pattern must repeat continuously with no visible seam when tiled left-to-right and top-to-bottom. Photographic material realism but simplified — readable when scaled down. No text, no watermark, no logo, no objects sitting on the surface.",
+
+    "layer": "Wide cinematic matte-painting layer for a 2D game background, painted flat with no camera lens effects. Even exposure, no lens flare, no vignette, no depth-of-field blur, no text, no watermark, no logo, no visible airline branding. Horizon line runs across the exact vertical middle of the frame. Colours slightly desaturated and cool so foreground gameplay elements read on top of it."
+  },
+
+  "assets": [
+    {
+      "id": "bag_rollaboard", "style": "sprite", "alpha": "chroma", "trim": true, "height": 256,
+      "prompt": "A coral-red hard-shell four-wheel carry-on roller suitcase standing upright, telescoping black handle fully retracted. One bold cream-white horizontal stripe wrapping across the middle of the shell. Chunky black corner guards and four dark spinner wheels."
+    },
+    {
+      "id": "bag_duffel", "style": "sprite", "alpha": "chroma", "trim": true, "height": 256,
+      "prompt": "A deep-blue soft canvas duffel bag, cylinder shaped, lying on its side with the zip facing up. One bold cream-white vertical stripe wrapping around the middle of the barrel. Thick tan leather carry handles standing up."
+    },
+    {
+      "id": "bag_vintage", "style": "sprite", "alpha": "chroma", "trim": true, "height": 256,
+      "prompt": "A mustard-yellow vintage leather suitcase, rectangular with rounded corners, standing on its long edge. Three large plain circular travel stickers in cream and dark brown on the face. Two chunky brass latches and a dark leather top handle."
+    },
+    {
+      "id": "bag_backpack", "style": "sprite", "alpha": "chroma", "trim": true, "height": 256,
+      "prompt": "A purple hiking backpack standing upright, fat and rounded. One large cream-white circular ring patch centred on the front panel. Thick grey shoulder straps and a dark grab loop at the top."
+    },
+    {
+      "id": "bag_medcase", "style": "sprite", "alpha": "chroma", "trim": true, "height": 256,
+      "prompt": "An olive-green rigid medical hard case, boxy with reinforced ribbed edges, lid closed. One large bold white cross centred on the lid. Two chunky black latches and a black top handle."
+    },
+    {
+      "id": "bag_garment", "style": "sprite", "alpha": "chroma", "trim": true, "height": 256,
+      "prompt": "A dusty-pink folded garment bag, soft rectangular with a rounded top, hanging hook folded flat. Two bold cream-white chevron stripes pointing up across the face. A dark zip running down one side."
+    },
+    {
+      "id": "bag_petcarrier", "style": "sprite", "alpha": "chroma", "trim": true, "height": 256,
+      "prompt": "A teal plastic pet carrier crate, boxy with a rounded roof and a thick top handle. A large cream-white chunky grid mesh door panel on the front face. Dark grey base and dark latches. Empty, no animal inside."
+    },
+    {
+      "id": "bag_surfboard", "style": "sprite", "alpha": "chroma", "trim": true, "height": 200,
+      "prompt": "An orange padded surfboard travel bag, long and tapered, lying flat and horizontal across the frame. Three bold cream-white diagonal stripes across the body. A dark webbing carry strap and a zip along the top edge. Wide horizontal composition."
+    },
+    {
+      "id": "bag_golf", "style": "sprite", "alpha": "chroma", "trim": true, "height": 200,
+      "prompt": "An indigo-blue golf club travel bag, a long padded tube, lying flat and horizontal across the frame. One bold cream-white stripe running the length of the bag. A dark reinforced cap at the wide end and a webbing strap. Wide horizontal composition."
+    },
+    {
+      "id": "bag_guitar", "style": "sprite", "alpha": "chroma", "trim": true, "height": 200,
+      "prompt": "A cyan hard-shell guitar flight case, classic guitar silhouette, lying flat and horizontal across the frame. Three large cream-white circular dots along the body. Chunky dark latches around the rim and a dark handle on the long edge. Wide horizontal composition."
+    },
+
+    {
+      "id": "tex_belt_slats", "style": "tile", "alpha": "none", "aspect": "1:1", "width": 512, "height": 512,
+      "prompt": "Matte black ribbed rubber conveyor belt made of interlocking overlapping slats, running as evenly spaced horizontal bands across the frame. Slight scuffing and dust in the grooves. Dark, low contrast, industrial."
+    },
+    {
+      "id": "tex_steel", "style": "tile", "alpha": "none", "aspect": "1:1", "width": 512, "height": 512,
+      "prompt": "Brushed stainless steel panel, fine horizontal grain, faint scratches and smudges, cool neutral grey. Airport equipment finish."
+    },
+    {
+      "id": "tex_floor", "style": "tile", "alpha": "none", "aspect": "1:1", "width": 512, "height": 512,
+      "prompt": "Polished grey terrazzo airport terminal floor with fine pale speckles and faint large-format tile joints. Slightly reflective but even, no highlights."
+    },
+
+    {
+      "id": "bg_sky", "style": "layer", "alpha": "none", "aspect": "16:9", "width": 1536,
+      "prompt": "Empty late-afternoon sky over an airfield, graded from warm pale amber near the horizon to a deep dusty blue at the top, with a few soft flat stratus cloud bands. Nothing else in frame — no aircraft, no buildings, no birds, no ground."
+    },
+    {
+      "id": "bg_skyline", "style": "layer", "alpha": "chroma", "aspect": "16:9", "width": 1536,
+      "prompt": "A distant airport skyline strip: a slender air traffic control tower, low terminal buildings, hangars, radio masts and a treeline, all rendered as a flat mid-grey-blue haze silhouette with only faint interior detail. Everything sits along the bottom third of the frame. The entire sky above and around is flat pure saturated green (#00FF00) and completely empty."
+    },
+    {
+      "id": "bg_apron", "style": "layer", "alpha": "none", "aspect": "16:9", "width": 1536,
+      "prompt": "Airport apron and taxiway seen from a distance at eye level: flat grey concrete with painted yellow taxiway centre lines and white runway threshold markings running left to right, low blue edge lights, dry grass verge along the far side. Empty pavement — no aircraft, no vehicles, no people."
+    },
+    {
+      "id": "spr_plane", "style": "sprite", "alpha": "chroma", "trim": true, "height": 320,
+      "prompt": "A twin-engine passenger jet airliner seen from the side, plain white fuselage with a simple pale grey belly and a plain unmarked tail fin, landing gear extended, nose pitched slightly up as if rotating for takeoff. Completely unbranded — no airline livery, no titles, no logos, no registration, no flag. Viewed flat from the side, not three-quarter. Wide horizontal composition."
+    },
+    {
+      "id": "spr_taxi", "style": "sprite", "alpha": "chroma", "trim": true, "height": 160,
+      "prompt": "A yellow airport shuttle taxi car seen flat from the side, simple rounded body, dark windows, a plain unlit roof sign with no text on it. Completely unbranded. Wide horizontal composition."
+    },
+    {
+      "id": "spr_tug", "style": "sprite", "alpha": "chroma", "trim": true, "height": 160,
+      "prompt": "A white airport baggage tug towing two open flatbed baggage carts loaded with a few generic suitcases, seen flat from the side. Completely unbranded, no text. Wide horizontal composition."
+    },
+    {
+      "id": "spr_strip_curtain", "style": "sprite", "alpha": "chroma", "trim": true, "height": 384,
+      "prompt": "A baggage hall exit hood: a dark steel rectangular portal with a curtain of hanging translucent grey-white PVC strips across the opening, seen straight on from the front. The strips hang vertically and are slightly parted in the middle. Nothing behind the opening except darkness. Wide horizontal composition."
+    }
+  ]
+}
