@@ -1,0 +1,12 @@
+{
+  "images": [
+    {
+      "filename": "spr_tug.png",
+      "idiom": "universal"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}

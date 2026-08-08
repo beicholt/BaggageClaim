@@ -1,2 +1,9 @@
 assets/_raw/
 __pycache__/
+
+# Xcode
+build/
+DerivedData/
+*.xcuserdatad
+xcuserdata/
+.DS_Store
