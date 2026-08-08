@@ -18,7 +18,7 @@ final class GameScene: SKScene {
     // MARK: - Setup
 
     override func didMove(to view: SKView) {
-        backgroundColor = .hex(0x090D12)
+        backgroundColor = Palette.floorFar
         scaleMode = .resizeFill
         addChild(world)
         rebuild(for: size)
@@ -106,7 +106,7 @@ final class GameScene: SKScene {
         clock += CGFloat(dt)
 
         state.update(dt: dt)
-        hall.update(dt: CGFloat(min(0.05, dt)), gateFlash: state.gateFlash, clock: clock)
+        hall.update(gateFlash: state.gateFlash, clock: clock)
         syncBags()
         tray.sync(state: state, projection: proj)
         hud.sync(state: state)

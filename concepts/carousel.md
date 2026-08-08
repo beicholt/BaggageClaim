@@ -130,13 +130,31 @@ No tutorial text, no hand pointing at the screen.
 
 ## Art direction
 
-The generated bag sprites are the production look and Brian likes them. They
-stay. What changes:
+**Stylized, never photographic.** The bag sprites set the style for everything:
+clean stylized 3D render, matte materials, simple chunky forms, no fine detail.
+Backgrounds match them. The first pass got this wrong — the layer prompts asked
+for a "cinematic matte painting" with "colours slightly desaturated and cool",
+which produced a photoreal airfield that clashed with every bag on the belt.
 
-- **Brighter.** The prototype hall is dark and reads as night. It wants light.
-- **Colour, not rainbow.** Saturated and warm, not a kids' primary palette.
-- **More bags, more sizes.** The roster needs to grow well past ten, across
-  small, standard and oversized, so a forty-level game does not repeat itself.
+**Bright daylight.** The hall is lit like midday, not midnight. Light floors and
+walls, a genuinely blue sky through the glass. The belt stays dark on purpose —
+it is the one thing the bags are read against, and a light belt leaves the pale
+ones floating. The claim zone is warm near-white light *added* to that dark
+belt; a saturated amber painted over slate comes out mustard and reads as a mat
+rather than a spotlight.
+
+**Colour, not rainbow.** Saturated and warm, not a kids' primary palette.
+
+**No ambient animation.** Nothing moves but the belt, the bags and the tray. The
+window is a still view.
+
+**More bags, more sizes.** The roster needs to grow well past ten, across small,
+standard and oversized, so a forty-level game does not repeat itself.
+
+The whole room is flat shapes in [`Palette.swift`](../Carousel/Game/Palette.swift)
+and [`HallNode.swift`](../Carousel/Game/HallNode.swift), because the camera never
+moves. It can be replaced with a single rendered backdrop later without touching
+the game.
 
 Assets are generated, not commissioned: `tools/assets.json` holds one prompt
 per asset plus a shared style block, `tools/gen_assets.py` renders them through

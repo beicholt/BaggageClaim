@@ -31,7 +31,7 @@ final class OverlayNode: SKNode {
 
     private func build(_ size: CGSize) {
         scrim.path = CGPath(rect: CGRect(origin: .zero, size: size), transform: nil)
-        scrim.fillColor = .hex(0x05080C, alpha: 0.86)
+        scrim.fillColor = Palette.scrim.withAlphaComponent(0.82)
         scrim.strokeColor = .clear
         addChild(scrim)
 
@@ -69,12 +69,12 @@ final class OverlayNode: SKNode {
 
         let rect = CGRect(x: size.width / 2 - 96, y: cy - 200, width: 192, height: 54)
         button = SKShapeNode(rect: rect, cornerRadius: 8)
-        button.fillColor = .hex(0xF0B45A)
+        button.fillColor = Palette.button
         button.strokeColor = .clear
         addChild(button)
 
         buttonLabel.fontSize = 17
-        buttonLabel.fontColor = .hex(0x14181E)
+        buttonLabel.fontColor = Palette.buttonText
         buttonLabel.verticalAlignmentMode = .center
         buttonLabel.position = CGPoint(x: rect.midX, y: rect.midY)
         addChild(buttonLabel)

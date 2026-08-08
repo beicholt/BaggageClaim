@@ -29,8 +29,8 @@ final class TrayNode: SKNode {
         slotWidth = (box.width - gap * CGFloat(Tune.trayCapacity - 1)) / CGFloat(Tune.trayCapacity)
 
         let plate = SKShapeNode(rect: box.insetBy(dx: -8, dy: -8), cornerRadius: 14)
-        plate.fillColor = .hex(0x0B0F14, alpha: 0.86)
-        plate.strokeColor = .hex(0x2A323C)
+        plate.fillColor = Palette.trayPlate
+        plate.strokeColor = Palette.trayEdge
         plate.lineWidth = 1
         addChild(plate)
 
@@ -38,8 +38,8 @@ final class TrayNode: SKNode {
             let well = SKShapeNode(rect: CGRect(x: box.minX + CGFloat(i) * (slotWidth + gap),
                                                 y: box.minY, width: slotWidth, height: box.height),
                                    cornerRadius: 7)
-            well.fillColor = .hex(0x121821, alpha: 0.9)
-            well.strokeColor = .hex(0x232C37)
+            well.fillColor = Palette.trayWell
+            well.strokeColor = Palette.trayEdge
             well.lineWidth = 1
             addChild(well)
             wells.append(well)

@@ -12,7 +12,7 @@ final class BagNode: SKNode {
         super.init()
         shadow.fillColor = .black
         shadow.strokeColor = .clear
-        shadow.alpha = 0.34
+        shadow.alpha = 0.26
         shadow.zPosition = -1
         addChild(shadow)
 
@@ -37,9 +37,9 @@ final class BagNode: SKNode {
         sprite.size = CGSize(width: width, height: height)
         // Out of reach reads as dimmed. It is the cheapest way to say "you can
         // see it, you cannot have it yet" without adding any UI.
-        sprite.color = .hex(0x39424E)
-        sprite.colorBlendFactor = dimmed ? 0.55 : 0
-        sprite.alpha = dimmed ? 0.92 : 1
+        sprite.color = .hex(0xADB8C4)
+        sprite.colorBlendFactor = dimmed ? 0.62 : 0
+        sprite.alpha = dimmed ? 0.82 : 1
         shadow.setScale(1)
         shadow.xScale = width * 1.05
         shadow.yScale = height * 0.22

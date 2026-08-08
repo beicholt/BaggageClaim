@@ -5,9 +5,9 @@
   "styles": {
     "sprite": "Single video-game sprite asset. Clean stylized 3D render, soft neutral studio lighting, matte materials, gentle ambient occlusion, no blown-out speculars. Fixed camera: high three-quarter view, about 55 degrees above the horizon, looking down at the object. The object is centred, fills roughly 85% of the frame, and is completely isolated on a flat, uniform, pure saturated green (#00FF00) background. Absolutely no cast shadow, no ground plane, no reflection, no vignette, no text, no watermark, no logo, no brand mark, no packaging. Bold chunky silhouette with strong internal value contrast — this asset is displayed at roughly 48 pixels tall, so no fine detail, no thin lines, no small text, no busy texture.",
 
-    "tile": "Seamlessly tileable texture swatch, flat orthographic top-down view, perfectly even lighting edge to edge, no vignette, no directional shadow, no perspective. The pattern must repeat continuously with no visible seam when tiled left-to-right and top-to-bottom. Photographic material realism but simplified — readable when scaled down. No text, no watermark, no logo, no objects sitting on the surface.",
+    "tile": "Seamlessly tileable texture swatch, flat orthographic top-down view, perfectly even lighting edge to edge, no vignette, no directional shadow, no perspective. The pattern must repeat continuously with no visible seam when tiled left-to-right and top-to-bottom. Clean stylized game texture with matte simplified materials — not photographic, no photo grain, no camera artefacts. Bright and lightly saturated, readable when scaled down. No text, no watermark, no logo, no objects sitting on the surface.",
 
-    "layer": "Wide cinematic matte-painting layer for a 2D game background, painted flat with no camera lens effects. Even exposure, no lens flare, no vignette, no depth-of-field blur, no text, no watermark, no logo, no visible airline branding. Horizon line runs across the exact vertical middle of the frame. Colours slightly desaturated and cool so foreground gameplay elements read on top of it."
+    "layer": "Wide background layer for a stylized video game, in exactly the same art style as the game's props: clean stylized 3D render, matte materials, soft ambient occlusion, simple chunky forms, no fine detail. Explicitly NOT photographic and NOT a realistic matte painting — no photo texture, no photo grain, no lens flare, no vignette, no depth-of-field blur, no camera artefacts. Bright open midday daylight, high key, clear saturated colours and a genuinely blue sky. Even exposure across the whole frame. No text, no watermark, no logo, no airline branding, no people."
   },
 
   "assets": [
@@ -67,28 +67,8 @@
     },
 
     {
-      "id": "bg_sky", "style": "layer", "alpha": "none", "aspect": "16:9", "width": 1536,
-      "prompt": "Empty late-afternoon sky over an airfield, graded from warm pale amber near the horizon to a deep dusty blue at the top, with a few soft flat stratus cloud bands. Nothing else in frame — no aircraft, no buildings, no birds, no ground."
-    },
-    {
-      "id": "bg_skyline", "style": "layer", "alpha": "chroma", "aspect": "16:9", "width": 1536,
-      "prompt": "A distant airport skyline strip: a slender air traffic control tower, low terminal buildings, hangars, radio masts and a treeline, all rendered as a flat mid-grey-blue haze silhouette with only faint interior detail. Everything sits along the bottom third of the frame. The entire sky above and around is flat pure saturated green (#00FF00) and completely empty."
-    },
-    {
-      "id": "bg_apron", "style": "layer", "alpha": "none", "aspect": "16:9", "width": 1536,
-      "prompt": "Airport apron and taxiway seen from a distance at eye level: flat grey concrete with painted yellow taxiway centre lines and white runway threshold markings running left to right, low blue edge lights, dry grass verge along the far side. Empty pavement — no aircraft, no vehicles, no people."
-    },
-    {
-      "id": "spr_plane", "style": "sprite", "alpha": "chroma", "trim": true, "height": 320,
-      "prompt": "A twin-engine passenger jet airliner seen from the side, plain white fuselage with a simple pale grey belly and a plain unmarked tail fin, landing gear extended, nose pitched slightly up as if rotating for takeoff. Completely unbranded — no airline livery, no titles, no logos, no registration, no flag. Viewed flat from the side, not three-quarter. Wide horizontal composition."
-    },
-    {
-      "id": "spr_taxi", "style": "sprite", "alpha": "chroma", "trim": true, "height": 160,
-      "prompt": "A yellow airport shuttle taxi car seen flat from the side, simple rounded body, dark windows, a plain unlit roof sign with no text on it. Completely unbranded. Wide horizontal composition."
-    },
-    {
-      "id": "spr_tug", "style": "sprite", "alpha": "chroma", "trim": true, "height": 160,
-      "prompt": "A white airport baggage tug towing two open flatbed baggage carts loaded with a few generic suitcases, seen flat from the side. Completely unbranded, no text. Wide horizontal composition."
+      "id": "bg_window", "style": "layer", "alpha": "none", "aspect": "16:9", "width": 1536,
+      "prompt": "The view out of an airport terminal window on a bright clear day, seen straight on from inside at eye level. Bottom third: a simple pale concrete apron with soft yellow taxiway lines. Middle: a row of simple stylized airport buildings and a slender control tower in flat mid-tones, with a strip of green grass. Top two thirds: a clean bright blue sky with a few soft rounded white clouds. Simple chunky shapes, flat colour blocking, no fine detail. Empty — no aircraft, no vehicles, no people, no birds."
     },
     {
       "id": "spr_strip_curtain", "style": "sprite", "alpha": "chroma", "trim": true, "height": 384,

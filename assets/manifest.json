@@ -59,47 +59,17 @@
     "h": 256,
     "w": 226
   },
-  "bg_apron": {
+  "bg_window": {
     "alpha": false,
-    "file": "bg_apron.png",
+    "file": "bg_window.png",
     "h": 878,
     "w": 1536
-  },
-  "bg_sky": {
-    "alpha": false,
-    "file": "bg_sky.png",
-    "h": 878,
-    "w": 1536
-  },
-  "bg_skyline": {
-    "alpha": true,
-    "file": "bg_skyline.png",
-    "h": 830,
-    "w": 1536
-  },
-  "spr_plane": {
-    "alpha": true,
-    "file": "spr_plane.png",
-    "h": 320,
-    "w": 1303
   },
   "spr_strip_curtain": {
     "alpha": true,
     "file": "spr_strip_curtain.png",
     "h": 384,
     "w": 355
-  },
-  "spr_taxi": {
-    "alpha": true,
-    "file": "spr_taxi.png",
-    "h": 160,
-    "w": 201
-  },
-  "spr_tug": {
-    "alpha": true,
-    "file": "spr_tug.png",
-    "h": 160,
-    "w": 705
   },
   "tex_belt_slats": {
     "alpha": false,
