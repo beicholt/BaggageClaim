@@ -28,6 +28,8 @@ final class GameScene: SKScene {
         // until belt three, and playing up to belt nine by hand every time is
         // not a test, it is a chore nobody repeats.
         if let raw = ProcessInfo.processInfo.environment["CAROUSEL_LEVEL"], let n = Int(raw) {
+            // A QA run must never become the player's saved position.
+            Progress.suspended = true
             state.startLevel(max(1, n))
             showDebugCard()
             return
@@ -36,7 +38,8 @@ final class GameScene: SKScene {
         // The belt idles behind the title card, so the first thing the player
         // sees is a machine already running.
         state.seedIdleBelt()
-        overlay.showTitle()
+        overlay.showTitle(resumingAt: Progress.hasPlayed ? Progress.belt : nil,
+                          best: Progress.bestScore)
     }
 
     override func didChangeSize(_ oldSize: CGSize) {
@@ -109,10 +112,14 @@ final class GameScene: SKScene {
             switch phase {
             case .won:
                 Haptics.won()
+                Progress.record(belt: self.state.level + 1, score: self.state.score,
+                                flow: self.state.bestMultiplier)
                 self.overlay.showWon(level: self.state.level, score: self.state.score,
                                      best: self.state.bestMultiplier)
             case .lost:
                 Haptics.lost()
+                Progress.record(belt: self.state.level, score: self.state.score,
+                                flow: self.state.bestMultiplier)
                 self.overlay.showLost(reason: self.state.lossReason, level: self.state.level,
                                       score: self.state.score, best: self.state.bestMultiplier)
             case .playing:
@@ -129,7 +136,7 @@ final class GameScene: SKScene {
         switch state.phase {
         case .won:  state.advanceLevel()
         case .lost: state.retryLevel()
-        default:    state.resumeFromTitle()
+        default:    state.startLevel(Progress.hasPlayed ? Progress.belt : 1)
         }
     }
 

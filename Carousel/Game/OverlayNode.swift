@@ -101,12 +101,21 @@ final class OverlayNode: SKNode {
 
     // MARK: - Cards
 
-    func showTitle() {
-        show(eyebrow: "Arrivals", title: "CAROUSEL",
-             lines: ["You can only grab bags in the lit zone.",
-                     "Three matching bags send a traveler home.",
-                     "Skip one and you wait a full lap for it."],
-             button: "Start", stats: nil)
+    /// First run explains the game. A returning player is told where they are
+    /// and what they have to beat, and the button says so.
+    func showTitle(resumingAt belt: Int?, best: Int) {
+        if let belt, belt > 1 {
+            show(eyebrow: "Arrivals", title: "CAROUSEL",
+                 lines: ["Pick up where you left off.", "", ""],
+                 button: "Continue \u{2014} belt \(String(format: "%02d", belt))",
+                 stats: (best, Progress.bestFlow))
+        } else {
+            show(eyebrow: "Arrivals", title: "CAROUSEL",
+                 lines: ["You can only grab bags in the lit zone.",
+                         "Three matching bags send a traveler home.",
+                         "Skip one and you wait a full lap for it."],
+                 button: "Start", stats: nil)
+        }
     }
 
     func showWon(level: Int, score: Int, best: Int) {

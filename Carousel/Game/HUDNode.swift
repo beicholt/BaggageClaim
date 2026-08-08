@@ -16,8 +16,9 @@ final class HUDNode: SKNode {
     private let score: StyledLabel
 
     private var returnButton: SKShapeNode!
-    private let returnLabel = StyledLabel(.button, Palette.trayLabel, align: .left)
-    private let returnCount = StyledLabel(.button, .hex(0xC97A00), align: .right)
+    private let returnLabel = StyledLabel(.button, .hex(0x2E3742), align: .left)
+    private let returnCount = StyledLabel(.button, .hex(0xB86E00), align: .right)
+    private var returnPip: SKShapeNode!
     private var returnRect: CGRect = .zero
 
     private let layout: Layout
@@ -75,9 +76,13 @@ final class HUDNode: SKNode {
         returnRect = CGRect(x: layout.contentLeft, y: layout.content.minY,
                             width: layout.contentWidth, height: 48)
         returnButton = SKShapeNode(rect: returnRect, cornerRadius: 12)
-        returnButton.fillColor = Palette.trayPlate
+        // Reads as a control rather than another panel: white against the
+        // tray's grey, with a defined edge. It sat on the same fill as the tray
+        // above it, which made the one thing down there you can press look like
+        // part of the furniture.
+        returnButton.fillColor = .white
         returnButton.strokeColor = Palette.trayEdge
-        returnButton.lineWidth = 1
+        returnButton.lineWidth = 1.5
         addChild(returnButton)
 
         returnLabel.text = "Return bag"
@@ -85,8 +90,20 @@ final class HUDNode: SKNode {
         addChild(returnLabel)
 
         // Right-aligned against the button's own padding, not nudged from the
-        // middle — so it stays put whatever the label says.
-        returnCount.position = CGPoint(x: returnRect.maxX - Layout.Space.l, y: returnRect.midY)
+        // middle — so it stays put whatever the label says. The count sits in
+        // its own pill, because a bare number next to a label reads as part of
+        // the label rather than as a quantity that runs out.
+        let pipR: CGFloat = 13
+        returnPip = SKShapeNode(circleOfRadius: pipR)
+        returnPip.fillColor = .hex(0xFFE9BF)
+        returnPip.strokeColor = .clear
+        returnPip.position = CGPoint(x: returnRect.maxX - Layout.Space.l - pipR + 4,
+                                     y: returnRect.midY)
+        addChild(returnPip)
+
+        returnCount.position = CGPoint(x: returnRect.maxX - Layout.Space.l + 4 - pipR,
+                                       y: returnRect.midY)
+        returnCount.horizontalAlignmentMode = .center
         addChild(returnCount)
     }
 
@@ -130,9 +147,9 @@ final class HUDNode: SKNode {
 
         returnCount.text = "\(state.returnsLeft)"
         let on = state.canReturn
-        returnButton.alpha = on ? 1 : 0.4
-        returnLabel.alpha = on ? 1 : 0.4
-        returnCount.alpha = on ? 1 : 0.4
+        for n in [returnButton, returnPip] as [SKNode] { n.alpha = on ? 1 : 0.45 }
+        returnLabel.alpha = on ? 1 : 0.45
+        returnCount.alpha = on ? 1 : 0.45
     }
 
     /// Returns true when the tap was the button's, so the belt does not also
