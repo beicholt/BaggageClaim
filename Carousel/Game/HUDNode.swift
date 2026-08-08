@@ -22,6 +22,13 @@ final class HUDNode: SKNode {
 
     private let layout: Layout
 
+    /// The score the readout is currently showing. It chases the real score
+    /// rather than snapping to it — a number that counts up is read as a
+    /// reward, where the same number appearing instantly is just a fact.
+    private var shownScore = 0
+    private var lastMultiplier = 1
+    private var pulse: CGFloat = 0
+
     init(layout: Layout) {
         self.layout = layout
         level = StyledLabel(.readout, Palette.hudText)
@@ -83,14 +90,43 @@ final class HUDNode: SKNode {
         addChild(returnCount)
     }
 
-    func sync(state: GameState) {
+    func sync(state: GameState, clock: CGFloat) {
         level.text = String(format: "%02d", state.level)
+
         let secs = max(0, Int(state.timeLeft.rounded(.up)))
         time.text = String(format: "%d:%02d", secs / 60, secs % 60)
-        time.tint(secs <= 15 ? Palette.hudLow : Palette.hudText)
+        if secs <= 15 && state.phase == .playing {
+            // Tighten as the flight boards: the clock leans on you rather than
+            // just changing colour and hoping you noticed.
+            let beat = abs(sin(clock * 3.4))
+            time.tint(Palette.hudLow)
+            time.setScale(1 + beat * 0.10)
+        } else {
+            time.tint(Palette.hudText)
+            time.setScale(1)
+        }
+
         flow.text = "×\(state.multiplier)"
         flow.tint(state.multiplier > 1 ? Palette.hudHot : Palette.hudCaption)
-        score.text = "\(state.score)"
+        if state.multiplier != lastMultiplier {
+            lastMultiplier = state.multiplier
+            if state.multiplier > 1 { pulse = 1 }
+        }
+        if pulse > 0 {
+            pulse = max(0, pulse - 0.06)
+            flow.setScale(1 + pulse * 0.45)
+        } else {
+            flow.setScale(1)
+        }
+
+        // Chase, never snap. Fast enough to keep up with a run, slow enough to
+        // read as counting.
+        if shownScore != state.score {
+            let gap = state.score - shownScore
+            shownScore += max(1, abs(gap) / 6) * (gap > 0 ? 1 : -1)
+            if abs(state.score - shownScore) < 2 { shownScore = state.score }
+        }
+        score.text = "\(shownScore)"
 
         returnCount.text = "\(state.returnsLeft)"
         let on = state.canReturn

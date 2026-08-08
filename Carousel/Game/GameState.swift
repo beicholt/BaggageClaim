@@ -48,6 +48,7 @@ final class GameState {
 
     /// Raised when something happens that the scene should react to.
     var onPop: ((Int, Int) -> Void)?             // type, slot index popped from
+    var onLand: ((Int) -> Void)?                 // slot index a claimed bag settled into
     var onClaim: (() -> Void)?
     var onReject: (() -> Void)?
     var onReturn: (() -> Void)?
@@ -282,6 +283,7 @@ final class GameState {
             if f.t >= 1 {
                 tray[i].flight = nil
                 landed = true
+                onLand?(i)
             } else {
                 tray[i].flight = f
             }

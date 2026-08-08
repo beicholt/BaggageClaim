@@ -26,6 +26,10 @@ final class BagNode: SKNode {
         Art.aspect(art) ?? fallback
     }
 
+    /// What the bag currently looks like, so a claim can leave a ghost behind
+    /// without the caller having to know how the node is put together.
+    var snapshot: (texture: SKTexture?, size: CGSize) { (sprite.texture, sprite.size) }
+
     func apply(art: String, at point: CGPoint, width: CGFloat, height: CGFloat,
                dimmed: Bool, z: CGFloat) {
         if art != self.art {

@@ -71,22 +71,42 @@ final class GameScene: SKScene {
     private var safeInsets: UIEdgeInsets { view?.safeAreaInsets ?? .zero }
 
     private func wireState() {
-        state.onClaim = { Audio.shared.play(.pick) }
-        state.onReject = { Audio.shared.play(.no) }
-        state.onReturn = { Audio.shared.play(.returnBag) }
+        Haptics.warm()
+        state.onClaim = {
+            Audio.shared.play(.pick)
+            Haptics.claim()
+        }
+        state.onReject = {
+            Audio.shared.play(.no)
+            Haptics.refuse()
+        }
+        state.onReturn = {
+            Audio.shared.play(.returnBag)
+            Haptics.claim()
+        }
+        state.onLand = { [weak self] slot in
+            guard let self else { return }
+            self.tray.land(at: slot, state: self.state)
+        }
         state.onPop = { [weak self] type, slot in
             guard let self else { return }
             Audio.shared.play(.pop, step: self.state.combo)
+            Haptics.pop(step: self.state.combo)
             self.tray.burst(at: slot, color: Bags[type].color, in: self)
         }
         state.onPhaseChange = { [weak self] phase in
             guard let self else { return }
             switch phase {
-            case .won:  self.overlay.showWon(level: self.state.level, score: self.state.score,
-                                             best: self.state.bestMultiplier)
-            case .lost: self.overlay.showLost(reason: self.state.lossReason, level: self.state.level,
-                                              score: self.state.score, best: self.state.bestMultiplier)
-            default:    self.overlay.hide()
+            case .won:
+                Haptics.won()
+                self.overlay.showWon(level: self.state.level, score: self.state.score,
+                                     best: self.state.bestMultiplier)
+            case .lost:
+                Haptics.lost()
+                self.overlay.showLost(reason: self.state.lossReason, level: self.state.level,
+                                      score: self.state.score, best: self.state.bestMultiplier)
+            default:
+                self.overlay.hide()
             }
         }
     }
@@ -111,7 +131,7 @@ final class GameScene: SKScene {
         hall.update(gateFlash: state.gateFlash, clock: clock)
         syncBags()
         tray.sync(state: state)
-        hud.sync(state: state)
+        hud.sync(state: state, clock: clock)
 
         // Screen shake, applied to the hall and belt but never the tray or HUD:
         // shaking the thing you are about to tap makes a miss feel like a bug.
@@ -162,6 +182,30 @@ final class GameScene: SKScene {
         }
     }
 
+    /// A brief ghost of the bag, lifting and fading where it was taken.
+    ///
+    /// Drawn as a throwaway node rather than on the bag itself: the pool
+    /// reassigns that index to a different bag on the very next frame, so
+    /// animating it would play the flourish on the wrong suitcase.
+    private func flashClaim(_ node: BagNode, at point: CGPoint) {
+        let shot = node.snapshot
+        guard let texture = shot.texture else { return }
+        let ghost = SKSpriteNode(texture: texture)
+        ghost.size = shot.size
+        ghost.anchorPoint = CGPoint(x: 0.5, y: 0)
+        ghost.position = point
+        ghost.zPosition = 650
+        addChild(ghost)
+        ghost.run(.sequence([
+            .group([
+                .scale(to: 1.3, duration: 0.16),
+                .moveBy(x: 0, y: shot.size.height * 0.25, duration: 0.16),
+                .fadeOut(withDuration: 0.16),
+            ]),
+            .removeFromParent(),
+        ]))
+    }
+
     // MARK: - Input
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -186,9 +230,18 @@ final class GameScene: SKScene {
             guard c.i < bagNodes.count, bagNodes[c.i].contains(opaquePoint: local) else { continue }
             if state.track.inHall(bag.s) { continue }
             if !state.track.inGate(bag.s) { sawOutOfReach = true; continue }
-            state.claim(bagIndex: c.i, from: hall.convert(bagNodes[c.i].position, to: self))
+            let node = bagNodes[c.i]
+            let from = hall.convert(node.position, to: self)
+            let before = state.tray.count
+            state.claim(bagIndex: c.i, from: from)
+            // Only if the claim was actually honoured — a refused tap gets the
+            // shake and the buzz, not a flourish.
+            if state.tray.count > before { flashClaim(node, at: from) }
             return
         }
-        if sawOutOfReach { state.flashGate() }      // teach, don't punish
+        if sawOutOfReach {
+            state.flashGate()                       // teach, don't punish
+            Haptics.refuse()
+        }
     }
 }

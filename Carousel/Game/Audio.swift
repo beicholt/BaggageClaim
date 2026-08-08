@@ -58,17 +58,20 @@ final class Audio {
         let peak: Float = cue == .pop ? 0.16 : 0.07
         let square = cue == .no
 
+        // Scheduled immediately, with the second note deferred on the main
+        // queue. The previous version derived a sample time from the player's
+        // lastRenderTime, which is nil until the node has rendered once — so
+        // the very first sound of a session silently never played.
         for (i, f) in freqs.enumerated() {
             guard let buffer = tone(frequency: f, peak: peak, square: square) else { continue }
             let player = players[next % players.count]
             next += 1
-            let when = AVAudioTime(sampleTime: AVAudioFramePosition(Double(i) * 0.06 * 44_100),
-                                   atRate: 44_100)
-            player.scheduleBuffer(buffer, at: player.lastRenderTime.flatMap {
-                player.playerTime(forNodeTime: $0).map {
-                    AVAudioTime(sampleTime: $0.sampleTime + when.sampleTime, atRate: 44_100)
-                }
-            }, options: [], completionHandler: nil)
+            let fire = { player.scheduleBuffer(buffer, at: nil, options: [], completionHandler: nil) }
+            if i == 0 {
+                fire()
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.06, execute: fire)
+            }
         }
     }
 

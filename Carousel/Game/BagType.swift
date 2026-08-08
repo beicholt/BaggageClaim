@@ -33,6 +33,17 @@ enum Bags {
 }
 
 extension UIColor {
+    /// Mix toward another colour. `k` of 0 is self, 1 is the target.
+    func blend(to other: UIColor, _ k: CGFloat) -> UIColor {
+        var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
+        var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
+        getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+        other.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+        let k = min(1, max(0, k))
+        return UIColor(red: r1 + (r2 - r1) * k, green: g1 + (g2 - g1) * k,
+                       blue: b1 + (b2 - b1) * k, alpha: a1 + (a2 - a1) * k)
+    }
+
     static func hex(_ v: UInt32, alpha: CGFloat = 1) -> UIColor {
         UIColor(red: CGFloat((v >> 16) & 0xFF) / 255,
                 green: CGFloat((v >> 8) & 0xFF) / 255,

@@ -103,5 +103,63 @@ do {
     check("return costs a charge", g.returnsLeft == charges - 1)
 }
 
+// Clearing the belt wins the level.
+do {
+    let g = GameState()
+    g.startLevel(1)
+    while !g.bags.isEmpty {
+        // Take whatever keeps the tray legal; the point is to empty the belt.
+        let i = g.bags.firstIndex { Bags[$0.type].size + g.unitsUsed <= Tune.trayCapacity }
+        guard let i else { break }
+        g.claim(bagIndex: i, from: .zero)
+        settle(g)
+    }
+    check("emptying the belt wins", g.phase == .won)
+}
+
+// Winning and moving on resets what a level owns, and keeps what the run owns.
+do {
+    let g = GameState()
+    g.startLevel(4)
+    g.claim(bagIndex: 0, from: .zero)
+    settle(g)
+    g.returnBag()
+    let carried = g.score
+    g.advanceLevel()
+    check("next level steps the counter", g.level == 5)
+    check("next level refills returns", g.returnsLeft == Tune.returnsPerLevel)
+    check("next level empties the tray", g.tray.isEmpty)
+    check("next level keeps the score", g.score == carried)
+}
+
+// Retrying hands back the score you had when the level started, so a failed
+// attempt cannot bank points.
+do {
+    let g = GameState()
+    g.startLevel(2)
+    let atStart = g.score
+    let type = g.bags[0].type
+    var taken = 0
+    while taken < 3, let i = g.bags.firstIndex(where: { $0.type == type }) {
+        g.claim(bagIndex: i, from: .zero); settle(g); taken += 1
+    }
+    g.retryLevel()
+    check("retry rolls the score back", g.score == atStart)
+}
+
+// The clock has to be long enough to clear the belt at all. A level you cannot
+// finish however well you play is a bug, not a difficulty setting.
+do {
+    let g = GameState()
+    var worst = Double.greatestFiniteMagnitude
+    for level in 1...20 {
+        g.startLevel(level)
+        // One lap is the longest any single bag can make you wait.
+        let lap = Double(g.track.total) / Double(max(0.01, 1.76))
+        worst = min(worst, g.timeLeft / lap)
+    }
+    check("every level allows at least two laps", worst >= 2.0)
+}
+
 print(failures == 0 ? "\nall checks passed" : "\n\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

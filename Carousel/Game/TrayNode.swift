@@ -16,6 +16,7 @@ final class TrayNode: SKNode {
     private let gap = Layout.Space.s
 
     private var sprites: [SKSpriteNode] = []
+    private var wells: [SKShapeNode] = []
 
     init(layout: Layout) {
         super.init()
@@ -50,6 +51,7 @@ final class TrayNode: SKNode {
             well.fillColor = Palette.trayWell
             well.strokeColor = .clear
             addChild(well)
+            wells.append(well)
         }
     }
 
@@ -87,23 +89,69 @@ final class TrayNode: SKNode {
 
             let target = slotCentre(state: state, index: i)
             if let f = item.flight {
-                // Ease out, so the bag arrives settled rather than snapping,
-                // and overshoot very slightly so it lands with some weight.
+                // Ease out along the line, and lift over an arc on the way. A
+                // straight slide reads as a UI transition; a thrown bag traces
+                // a curve and lands with some weight behind it.
                 let t = min(1, f.t)
                 let k = 1 - pow(1 - t, 3)
+                let lift = sin(t * .pi) * 46
                 sprite.position = CGPoint(x: f.from.x + (target.x - f.from.x) * k,
-                                          y: f.from.y + (target.y - f.from.y) * k)
-                sprite.setScale(0.72 + 0.34 * k - 0.06 * sin(t * .pi))
+                                          y: f.from.y + (target.y - f.from.y) * k + lift)
+                sprite.zRotation = (1 - t) * 0.35
+                sprite.setScale(0.72 + 0.28 * k)
             } else {
                 sprite.position = target
-                sprite.setScale(1)
+                sprite.zRotation = 0
+                if sprite.action(forKey: "land") == nil { sprite.setScale(1) }
             }
         }
+    }
+
+    /// The slot takes the impact: a quick squash on the bag and a flash in the
+    /// well underneath, so landing is something you see as well as feel.
+    func land(at index: Int, state: GameState) {
+        guard index < sprites.count else { return }
+        let sprite = sprites[index]
+        sprite.removeAction(forKey: "land")
+        sprite.setScale(1)
+        sprite.run(.sequence([
+            .group([.scaleX(to: 1.16, duration: 0.06), .scaleY(to: 0.84, duration: 0.06)]),
+            .group([.scaleX(to: 1.0, duration: 0.16), .scaleY(to: 1.0, duration: 0.16)]),
+        ]), withKey: "land")
+
+        var units = 0
+        for i in 0..<index where i < state.tray.count { units += Bags[state.tray[i].type].size }
+        guard units < wells.count else { return }
+        let well = wells[units]
+        well.removeAllActions()
+        well.fillColor = Palette.trayWell
+        well.run(.sequence([
+            .customAction(withDuration: 0.05) { n, _ in
+                (n as? SKShapeNode)?.fillColor = .white
+            },
+            .customAction(withDuration: 0.28) { n, t in
+                let k = min(1, t / 0.28)
+                (n as? SKShapeNode)?.fillColor = UIColor.white.blend(to: Palette.trayWell, k)
+            },
+        ]))
     }
 
     func burst(at slot: Int, color: UIColor, in scene: SKScene) {
         let x = box.minX + (CGFloat(slot) + 0.5) * (slotWidth + gap)
         let at = CGPoint(x: min(box.maxX, x), y: box.midY)
+
+        let ring = SKShapeNode(circleOfRadius: 14)
+        ring.position = at
+        ring.strokeColor = color
+        ring.lineWidth = 3
+        ring.fillColor = .clear
+        ring.zPosition = 899
+        scene.addChild(ring)
+        ring.run(.sequence([
+            .group([.scale(to: 3.0, duration: 0.34), .fadeOut(withDuration: 0.34)]),
+            .removeFromParent(),
+        ]))
+
         for _ in 0..<14 {
             let dot = SKShapeNode(circleOfRadius: .random(in: 2...4.5))
             dot.fillColor = color
