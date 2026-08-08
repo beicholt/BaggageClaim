@@ -5,44 +5,51 @@ import SpriteKit
 /// Slots are laid out by *units*, not by item count: an oversized bag occupies
 /// two slots and is drawn spanning both, so the tray shows its shape rather
 /// than just how full it is.
+///
+/// Shares its left and right edges with the Return button below it — both come
+/// from `Layout.content`, so the bottom of the screen reads as one block rather
+/// than two things that happen to be near each other.
 final class TrayNode: SKNode {
 
     private(set) var box: CGRect = .zero
     private(set) var slotWidth: CGFloat = 0
-    private let gap: CGFloat = 6
+    private let gap = Layout.Space.s
 
-    private var wells: [SKShapeNode] = []
     private var sprites: [SKSpriteNode] = []
 
-    init(size: CGSize, insets: UIEdgeInsets) {
+    init(layout: Layout) {
         super.init()
-        layout(size: size, insets: insets)
+        build(layout)
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    private func layout(size: CGSize, insets: UIEdgeInsets) {
-        let bottom = max(insets.bottom, 10)
-        let trayH = min(96, max(70, size.height * 0.16))
-        let h = trayH - 26
-        box = CGRect(x: 14, y: bottom + 54, width: size.width - 28, height: h)
-        slotWidth = (box.width - gap * CGFloat(Tune.trayCapacity - 1)) / CGFloat(Tune.trayCapacity)
-
-        let plate = SKShapeNode(rect: box.insetBy(dx: -8, dy: -8), cornerRadius: 14)
+    private func build(_ layout: Layout) {
+        let plateHeight: CGFloat = 82
+        // Sits directly above the Return button, one step of the scale away.
+        let plateY = layout.content.minY + 48 + Layout.Space.m
+        let plate = SKShapeNode(rect: CGRect(x: layout.contentLeft, y: plateY,
+                                             width: layout.contentWidth, height: plateHeight),
+                                cornerRadius: 14)
         plate.fillColor = Palette.trayPlate
         plate.strokeColor = Palette.trayEdge
         plate.lineWidth = 1
         addChild(plate)
 
+        // The wells are inset from the plate by one step, and divide what is
+        // left evenly — so the outer gaps match the inner ones.
+        box = CGRect(x: layout.contentLeft + Layout.Space.s, y: plateY + Layout.Space.s,
+                     width: layout.contentWidth - Layout.Space.s * 2,
+                     height: plateHeight - Layout.Space.s * 2)
+        slotWidth = (box.width - gap * CGFloat(Tune.trayCapacity - 1)) / CGFloat(Tune.trayCapacity)
+
         for i in 0..<Tune.trayCapacity {
             let well = SKShapeNode(rect: CGRect(x: box.minX + CGFloat(i) * (slotWidth + gap),
                                                 y: box.minY, width: slotWidth, height: box.height),
-                                   cornerRadius: 7)
+                                   cornerRadius: 8)
             well.fillColor = Palette.trayWell
-            well.strokeColor = Palette.trayEdge
-            well.lineWidth = 1
+            well.strokeColor = .clear
             addChild(well)
-            wells.append(well)
         }
     }
 
@@ -56,7 +63,7 @@ final class TrayNode: SKNode {
                        y: box.midY)
     }
 
-    func sync(state: GameState, projection: Projection) {
+    func sync(state: GameState) {
         while sprites.count < state.tray.count {
             let s = SKSpriteNode()
             s.zPosition = 10
@@ -73,18 +80,20 @@ final class TrayNode: SKNode {
             let units = CGFloat(type.size)
             let span = units * slotWidth + (units - 1) * gap
             let aspect = Art.aspect(type.art) ?? type.widthFactor
-            var h = box.height - 10
+            var h = box.height - Layout.Space.m
             var w = h * aspect
-            if w > span - 6 { w = span - 6; h = w / aspect }
+            if w > span - Layout.Space.s { w = span - Layout.Space.s; h = w / aspect }
             sprite.size = CGSize(width: w, height: h)
 
             let target = slotCentre(state: state, index: i)
             if let f = item.flight {
-                // Ease out, so the bag arrives settled rather than snapping.
-                let k = 1 - pow(1 - min(1, f.t), 3)
+                // Ease out, so the bag arrives settled rather than snapping,
+                // and overshoot very slightly so it lands with some weight.
+                let t = min(1, f.t)
+                let k = 1 - pow(1 - t, 3)
                 sprite.position = CGPoint(x: f.from.x + (target.x - f.from.x) * k,
                                           y: f.from.y + (target.y - f.from.y) * k)
-                sprite.setScale(0.7 + 0.3 * k)
+                sprite.setScale(0.72 + 0.34 * k - 0.06 * sin(t * .pi))
             } else {
                 sprite.position = target
                 sprite.setScale(1)
@@ -95,19 +104,20 @@ final class TrayNode: SKNode {
     func burst(at slot: Int, color: UIColor, in scene: SKScene) {
         let x = box.minX + (CGFloat(slot) + 0.5) * (slotWidth + gap)
         let at = CGPoint(x: min(box.maxX, x), y: box.midY)
-        for _ in 0..<12 {
-            let dot = SKShapeNode(circleOfRadius: .random(in: 2...4))
+        for _ in 0..<14 {
+            let dot = SKShapeNode(circleOfRadius: .random(in: 2...4.5))
             dot.fillColor = color
             dot.strokeColor = .clear
             dot.position = at
             dot.zPosition = 900
             scene.addChild(dot)
             let a = CGFloat.random(in: 0...(2 * .pi))
-            let v = CGFloat.random(in: 40...130)
+            let v = CGFloat.random(in: 50...150)
             dot.run(.sequence([
                 .group([
-                    .move(by: CGVector(dx: cos(a) * v, dy: sin(a) * v + 40), duration: 0.5),
-                    .fadeOut(withDuration: 0.5),
+                    .move(by: CGVector(dx: cos(a) * v, dy: sin(a) * v + 50), duration: 0.55),
+                    .scale(to: 0.2, duration: 0.55),
+                    .fadeOut(withDuration: 0.55),
                 ]),
                 .removeFromParent(),
             ]))

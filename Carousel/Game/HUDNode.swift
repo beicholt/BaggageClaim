@@ -1,106 +1,108 @@
 import SpriteKit
 
 /// The four readouts across the top, and the Return button under the tray.
+///
+/// Every edge here comes from `Layout` — the bar's stats sit on the same column
+/// grid, and the button spans the same content width as the tray above it, so
+/// the two share a left and a right edge instead of each having its own.
 final class HUDNode: SKNode {
 
     var onReturn: (() -> Void)?
 
-    private let levelValue = SKLabelNode()
-    private let timeValue = SKLabelNode()
-    private let flowValue = SKLabelNode()
-    private let scoreValue = SKLabelNode()
+    private let stats: [StyledLabel]
+    private let level: StyledLabel
+    private let time: StyledLabel
+    private let flow: StyledLabel
+    private let score: StyledLabel
 
     private var returnButton: SKShapeNode!
-    private let returnLabel = SKLabelNode()
-    private let returnCount = SKLabelNode()
+    private let returnLabel = StyledLabel(.button, Palette.trayLabel, align: .left)
+    private let returnCount = StyledLabel(.button, .hex(0xC97A00), align: .right)
+    private var returnRect: CGRect = .zero
 
-    private let sceneSize: CGSize
+    private let layout: Layout
 
-    init(size: CGSize, insets: UIEdgeInsets) {
-        self.sceneSize = size
+    init(layout: Layout) {
+        self.layout = layout
+        level = StyledLabel(.readout, Palette.hudText)
+        time  = StyledLabel(.readout, Palette.hudText)
+        flow  = StyledLabel(.readout, Palette.hudCaption)
+        score = StyledLabel(.readout, Palette.hudText)
+        stats = [level, time, flow, score]
         super.init()
-        buildTopBar(size: size, insets: insets)
-        buildReturn(size: size, insets: insets)
+        buildTopBar()
+        buildReturn()
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    private func buildTopBar(size: CGSize, insets: UIEdgeInsets) {
-        let top = size.height - max(insets.top, 12)
-        let bar = SKShapeNode(rect: CGRect(x: 0, y: top - 58, width: size.width, height: 70))
+    private func buildTopBar() {
+        let barHeight = max(layout.insets.top, Layout.Space.m) + 56
+        let bar = SKShapeNode(rect: CGRect(x: 0, y: layout.size.height - barHeight,
+                                           width: layout.size.width, height: barHeight))
         bar.fillColor = Palette.hudBar
         bar.strokeColor = .clear
         addChild(bar)
 
-        let columns: [(String, SKLabelNode, CGFloat)] = [
-            ("BELT", levelValue, 0.13),
-            ("DEPARTS", timeValue, 0.38),
-            ("FLOW", flowValue, 0.63),
-            ("SCORE", scoreValue, 0.88),
-        ]
-        for (title, value, fx) in columns {
-            let caption = SKLabelNode(fontNamed: "HelveticaNeue-Bold")
-            caption.text = title
-            caption.fontSize = 9
-            caption.fontColor = Palette.hudCaption
-            caption.position = CGPoint(x: size.width * fx, y: top - 16)
-            caption.horizontalAlignmentMode = .center
+        // Captions sit on a baseline, readouts on a baseline below it. Both are
+        // measured down from the safe area, so the bar looks the same on a
+        // phone with a notch and one without.
+        let captionY = layout.size.height - max(layout.insets.top, Layout.Space.m) - Layout.Space.m
+        let readoutY = captionY - Layout.Space.xl
+
+        for (i, pair) in [("Belt", level), ("Departs", time), ("Flow", flow), ("Score", score)].enumerated() {
+            let x = layout.columnCentre(i, of: 4)
+
+            let caption = StyledLabel(.caption, Palette.hudCaption)
+            caption.text = pair.0
+            caption.position = CGPoint(x: x, y: captionY)
             addChild(caption)
 
-            value.fontName = "Menlo-Bold"
-            value.fontSize = 22
-            value.fontColor = Palette.hudText
-            value.position = CGPoint(x: size.width * fx, y: top - 44)
-            value.horizontalAlignmentMode = .center
-            addChild(value)
+            pair.1.position = CGPoint(x: x, y: readoutY)
+            addChild(pair.1)
         }
     }
 
-    private func buildReturn(size: CGSize, insets: UIEdgeInsets) {
-        let bottom = max(insets.bottom, 10)
-        let rect = CGRect(x: 16, y: bottom + 4, width: size.width - 100, height: 42)
-        returnButton = SKShapeNode(rect: rect, cornerRadius: 10)
+    private func buildReturn() {
+        // Same width and same edges as the tray, which sits directly above it.
+        returnRect = CGRect(x: layout.contentLeft, y: layout.content.minY,
+                            width: layout.contentWidth, height: 48)
+        returnButton = SKShapeNode(rect: returnRect, cornerRadius: 12)
         returnButton.fillColor = Palette.trayPlate
         returnButton.strokeColor = Palette.trayEdge
         returnButton.lineWidth = 1
         addChild(returnButton)
 
-        returnLabel.fontName = "HelveticaNeue-Bold"
-        returnLabel.text = "RETURN BAG"
-        returnLabel.fontSize = 13
-        returnLabel.fontColor = Palette.trayLabel
-        returnLabel.verticalAlignmentMode = .center
-        returnLabel.position = CGPoint(x: rect.midX - 14, y: rect.midY)
+        returnLabel.text = "Return bag"
+        returnLabel.position = CGPoint(x: returnRect.minX + Layout.Space.l, y: returnRect.midY)
         addChild(returnLabel)
 
-        returnCount.fontName = "Menlo-Bold"
-        returnCount.fontSize = 14
-        returnCount.fontColor = .hex(0xD07A00)
-        returnCount.verticalAlignmentMode = .center
-        returnCount.position = CGPoint(x: rect.midX + 62, y: rect.midY)
+        // Right-aligned against the button's own padding, not nudged from the
+        // middle — so it stays put whatever the label says.
+        returnCount.position = CGPoint(x: returnRect.maxX - Layout.Space.l, y: returnRect.midY)
         addChild(returnCount)
     }
 
     func sync(state: GameState) {
-        levelValue.text = String(format: "%02d", state.level)
+        level.text = String(format: "%02d", state.level)
         let secs = max(0, Int(state.timeLeft.rounded(.up)))
-        timeValue.text = String(format: "%d:%02d", secs / 60, secs % 60)
-        timeValue.fontColor = secs <= 15 ? Palette.hudLow : Palette.hudText
-        flowValue.text = "×\(state.multiplier)"
-        flowValue.fontColor = state.multiplier > 1 ? Palette.hudHot : Palette.hudCaption
-        scoreValue.text = "\(state.score)"
+        time.text = String(format: "%d:%02d", secs / 60, secs % 60)
+        time.tint(secs <= 15 ? Palette.hudLow : Palette.hudText)
+        flow.text = "×\(state.multiplier)"
+        flow.tint(state.multiplier > 1 ? Palette.hudHot : Palette.hudCaption)
+        score.text = "\(state.score)"
 
         returnCount.text = "\(state.returnsLeft)"
         let on = state.canReturn
-        returnButton.alpha = on ? 1 : 0.45
-        returnLabel.alpha = on ? 1 : 0.45
-        returnCount.alpha = on ? 1 : 0.45
+        returnButton.alpha = on ? 1 : 0.4
+        returnLabel.alpha = on ? 1 : 0.4
+        returnCount.alpha = on ? 1 : 0.4
     }
 
     /// Returns true when the tap was the button's, so the belt does not also
     /// see it and claim a bag underneath.
     func handleTap(at p: CGPoint) -> Bool {
-        guard returnButton.contains(p) else { return false }
+        guard returnRect.contains(p) else { return false }
         onReturn?()
         return true
     }

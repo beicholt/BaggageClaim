@@ -127,48 +127,95 @@ final class HallNode: SKNode {
         addChild(skirting)
     }
 
+    /// Depth of the wall plane at belt height. Everything sorts against this:
+    /// further away is behind the wall, nearer is in front of it.
+    private var wallDepth: CGFloat { proj.depth(of: Vec3(0, Tune.beltY, Tune.wallZ)) }
+
+    /// The two arclengths where the loop crosses the wall plane.
+    ///
+    /// The belt runs from in front of the wall to behind it and back, so it
+    /// cannot be drawn at a single depth — do that and the wall either hides
+    /// the stretch of belt in front of it (bags at ten o'clock standing on
+    /// nothing) or fails to hide the stretch behind it. Split the loop here and
+    /// each half gets its own side of the wall.
+    private func wallCrossings() -> (front: CGFloat, back: CGFloat) {
+        let steps = 720
+        var crossings: [CGFloat] = []
+        var previous = track.point(at: 0).y
+        for i in 1...steps {
+            let s = track.total * CGFloat(i) / CGFloat(steps)
+            let z = track.point(at: s).y
+            if (previous < Tune.wallZ) != (z < Tune.wallZ) { crossings.append(s) }
+            previous = z
+        }
+        guard crossings.count >= 2 else { return (0, track.total) }
+        // s = 0 is the far straight, the deepest point behind the wall, so the
+        // stretch the player can see is the one *between* the two crossings.
+        return (crossings.first!, crossings.last!)
+    }
+
     private func buildCarousel() {
         let inner = -Tune.beltWidth / 2
         let outer = Tune.beltWidth / 2
 
-        // Outer skirt: the drum below the belt lip, down to the floor.
-        addRibbon(offsetA: outer, heightA: Tune.beltY,
-                  offsetB: outer + 0.22, heightB: 0,
-                  color: Palette.skirt, z: -500)
+        let (frontStart, frontEnd) = wallCrossings()
+        let frontSpan = frontEnd - frontStart
+        let behindStart = frontEnd
+        let behindSpan = track.total - frontSpan
 
-        // A lip along the top of the skirt, catching the light.
-        addRibbon(offsetA: outer, heightA: Tune.beltY,
-                  offsetB: outer + 0.06, heightB: Tune.beltY - 0.05,
-                  color: Palette.skirtEdge, z: -495)
+        // Just in front of the wall, so the belt runs right up to the hatch
+        // instead of being clipped a few points short of it. Bags carry a
+        // constant forward bias (see GameScene.syncBags) so they still draw
+        // over the stretch they are standing on.
+        let front = -wallDepth + 0.10
+        let behind = -wallDepth - 40
 
-        // Belt surface. Kept dark on purpose: it is the one thing the bags are
-        // read against, and a light belt would leave the pale ones floating.
-        addRibbon(offsetA: inner, heightA: Tune.beltY,
-                  offsetB: outer, heightB: Tune.beltY,
-                  color: Palette.belt, z: -480)
+        for (range, z) in [((frontStart, frontSpan), front), ((behindStart, behindSpan), behind)] {
+            let (start, span) = range
 
-        // Inner slope up to the island deck.
-        addRibbon(offsetA: inner - 0.55, heightA: Tune.beltY + 0.18,
-                  offsetB: inner, heightB: Tune.beltY,
-                  color: Palette.slope, z: -470)
+            // Outer skirt: the drum below the belt lip, down to the floor.
+            addRibbon(from: start, span: span,
+                      offsetA: outer, heightA: Tune.beltY,
+                      offsetB: outer + 0.22, heightB: 0,
+                      color: Palette.skirt, z: z + 0.00)
+
+            // A lip along the top of the skirt, catching the light.
+            addRibbon(from: start, span: span,
+                      offsetA: outer, heightA: Tune.beltY,
+                      offsetB: outer + 0.06, heightB: Tune.beltY - 0.05,
+                      color: Palette.skirtEdge, z: z + 0.01)
+
+            // Belt surface. Kept dark on purpose: it is the one thing the bags
+            // are read against, and a light belt leaves the pale ones floating.
+            addRibbon(from: start, span: span,
+                      offsetA: inner, heightA: Tune.beltY,
+                      offsetB: outer, heightB: Tune.beltY,
+                      color: Palette.belt, z: z + 0.02)
+
+            // Inner slope up to the island deck.
+            addRibbon(from: start, span: span,
+                      offsetA: inner - 0.55, heightA: Tune.beltY + 0.18,
+                      offsetB: inner, heightB: Tune.beltY,
+                      color: Palette.slope, z: z + 0.03)
+        }
 
         let pool = SKShapeNode(path: loopPath(offset: outer + 1.15, height: 0.001))
         pool.fillColor = Palette.floorFar.withAlphaComponent(0.75)
         pool.strokeColor = .clear
-        pool.zPosition = -520
+        pool.zPosition = -wallDepth - 60
         addChild(pool)
 
         let contact = SKShapeNode(path: loopPath(offset: outer + 0.34, height: 0.001))
         contact.fillColor = Palette.skirtEdge.withAlphaComponent(0.55)
         contact.strokeColor = .clear
-        contact.zPosition = -515
+        contact.zPosition = -wallDepth - 55
         addChild(contact)
 
         let deck = SKShapeNode(path: loopPath(offset: inner - 0.55, height: Tune.beltY + 0.18))
         deck.fillColor = Palette.deck
         deck.strokeColor = Palette.deckEdge
         deck.lineWidth = 1
-        deck.zPosition = -460
+        deck.zPosition = -wallDepth - 45
         addChild(deck)
 
         // The claim zone is the one warm thing in a cool room. On a bright hall
@@ -182,10 +229,38 @@ final class HallNode: SKNode {
         gate.fillColor = Palette.gate.withAlphaComponent(0.30)
         gate.strokeColor = Palette.gateEdge
         gate.lineWidth = 2.5
-        gate.zPosition = -450
+        gate.zPosition = -wallDepth + 0.15
         gate.blendMode = .add
         addChild(gate)
         gateNode = gate
+
+        addHoods(at: [frontStart, frontEnd])
+    }
+
+    /// Strip-curtain hoods where the belt passes through the wall.
+    ///
+    /// Without them a bag is fully visible one frame and gone the next — which
+    /// is what an opaque wall genuinely does, but it reads as the bag blinking
+    /// out in mid-air. A hatch makes the same disappearance mean something, and
+    /// it is what the far run of a real baggage hall actually looks like.
+    private func addHoods(at crossings: [CGFloat]) {
+        for s in crossings {
+            let hood = SKSpriteNode(imageNamed: "spr_strip_curtain")
+            guard let tex = hood.texture else { continue }
+
+            let centre = track.world(at: s, offset: 0, height: Tune.beltY)
+            let scale = proj.scale(atDepth: proj.depth(of: centre))
+            let worldW = Tune.beltWidth * 1.12
+            let worldH = worldW / (tex.size().width / tex.size().height)
+
+            hood.anchorPoint = CGPoint(x: 0.5, y: 0.02)   // sit the sill on the belt
+            hood.size = CGSize(width: worldW * scale, height: worldH * scale)
+            hood.position = proj.project(centre)
+            // In front of the wall and of any bag still crossing, so a bag
+            // slides behind the curtain rather than popping out of existence.
+            hood.zPosition = -wallDepth + 1.02
+            addChild(hood)
+        }
     }
 
     // MARK: - Projected geometry
@@ -204,13 +279,15 @@ final class HallNode: SKNode {
 
     /// A closed band between two offset copies of the loop — the shape every
     /// part of the carousel is made from.
-    private func addRibbon(offsetA: CGFloat, heightA: CGFloat,
+    private func addRibbon(from start: CGFloat, span: CGFloat,
+                           offsetA: CGFloat, heightA: CGFloat,
                            offsetB: CGFloat, heightB: CGFloat,
                            color: UIColor, z: CGFloat) {
-        let node = SKShapeNode(path: ribbonPath(from: 0, span: track.total,
+        let steps = max(12, Int(160 * span / track.total))
+        let node = SKShapeNode(path: ribbonPath(from: start, span: span,
                                                 offsetA: offsetA, heightA: heightA,
                                                 offsetB: offsetB, heightB: heightB,
-                                                steps: 160))
+                                                steps: steps))
         node.fillColor = color
         node.strokeColor = .clear
         node.zPosition = z

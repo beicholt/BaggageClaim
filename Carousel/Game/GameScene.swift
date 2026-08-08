@@ -45,19 +45,21 @@ final class GameScene: SKScene {
             hall.resize(proj)
         }
 
+        let layout = Layout(size: size, insets: safeInsets)
+
         hud?.removeFromParent()
-        hud = HUDNode(size: size, insets: safeInsets)
+        hud = HUDNode(layout: layout)
         hud.zPosition = 800
         hud.onReturn = { [weak self] in self?.state.returnBag() }
         addChild(hud)
 
         tray?.removeFromParent()
-        tray = TrayNode(size: size, insets: safeInsets)
+        tray = TrayNode(layout: layout)
         tray.zPosition = 700
         addChild(tray)
 
         overlay?.removeFromParent()
-        overlay = OverlayNode(size: size)
+        overlay = OverlayNode(layout: layout)
         overlay.zPosition = 1000
         overlay.onGo = { [weak self] in self?.startFromOverlay() }
         addChild(overlay)
@@ -108,7 +110,7 @@ final class GameScene: SKScene {
         state.update(dt: dt)
         hall.update(gateFlash: state.gateFlash, clock: clock)
         syncBags()
-        tray.sync(state: state, projection: proj)
+        tray.sync(state: state)
         hud.sync(state: state)
 
         // Screen shake, applied to the hall and belt but never the tray or HUD:
@@ -132,8 +134,14 @@ final class GameScene: SKScene {
         }
         for (i, node) in bagNodes.enumerated() {
             guard i < state.bags.count else { node.isHidden = true; continue }
-            node.isHidden = false
             let bag = state.bags[i]
+            // Behind the wall is hidden outright rather than sorted away. A
+            // billboard cannot be half-occluded by a flat wall, so trying to do
+            // it with depth alone forces a choice between bags that vanish
+            // early and bags that hang over the wall — this hides them at the
+            // hatch, where the strip curtain covers the moment.
+            node.isHidden = state.track.inHall(bag.s)
+            if node.isHidden { continue }
             let type = Bags[bag.type]
             let base = state.track.world(at: bag.s)
             let depth = proj.depth(of: base)
@@ -147,8 +155,10 @@ final class GameScene: SKScene {
                        width: worldW * scale,
                        height: worldH * scale,
                        dimmed: !state.track.inGate(bag.s),
-                       // Nearer the camera draws on top, and the wall sits between.
-                       z: -depth)
+                       // Nearer draws on top. The constant lift keeps every bag
+                       // in front of the belt it stands on, which sits just
+                       // ahead of the wall plane.
+                       z: -depth + 1.0)
         }
     }
 

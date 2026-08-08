@@ -2,108 +2,127 @@ import SpriteKit
 
 /// The card that covers the belt between levels: title, win, and the two ways
 /// to lose. The belt keeps turning behind it.
+///
+/// Laid out as one vertical stack with gaps from the spacing scale, measured
+/// from a single anchor. Nothing is positioned by eye, so the three cards line
+/// up with each other however much text each one carries.
 final class OverlayNode: SKNode {
 
     var onGo: (() -> Void)?
     private(set) var isVisible = false
 
-    private let scrim = SKShapeNode()
-    private let eyebrow = SKLabelNode(fontNamed: "HelveticaNeue-Bold")
-    private let title = SKLabelNode(fontNamed: "HelveticaNeue-CondensedBlack")
-    private let blurb: [SKLabelNode]
-    private let scoreCaption = SKLabelNode(fontNamed: "HelveticaNeue-Bold")
-    private let scoreValue = SKLabelNode(fontNamed: "Menlo-Bold")
-    private let bestCaption = SKLabelNode(fontNamed: "HelveticaNeue-Bold")
-    private let bestValue = SKLabelNode(fontNamed: "Menlo-Bold")
+    private let card = SKNode()
+    private let eyebrow: StyledLabel
+    private let title: StyledLabel
+    private let blurb: [StyledLabel]
+    private let scoreValue: StyledLabel
+    private let bestValue: StyledLabel
+    private let statsRow = SKNode()
+    private let buttonLabel: StyledLabel
     private var button: SKShapeNode!
-    private let buttonLabel = SKLabelNode(fontNamed: "HelveticaNeue-Bold")
-    private let sceneSize: CGSize
+    private var buttonRect: CGRect = .zero
 
-    init(size: CGSize) {
-        sceneSize = size
-        blurb = (0..<3).map { _ in SKLabelNode(fontNamed: "HelveticaNeue") }
+    private let layout: Layout
+
+    init(layout: Layout) {
+        self.layout = layout
+        eyebrow = StyledLabel(.caption, Palette.hudHot)
+        title = StyledLabel(.display, .white)
+        blurb = (0..<3).map { _ in StyledLabel(.body, .hex(0xB9C4D0)) }
+        scoreValue = StyledLabel(.readout, .white)
+        bestValue = StyledLabel(.readout, .white)
+        buttonLabel = StyledLabel(.button, Palette.buttonText)
         super.init()
-        build(size)
+        build()
         isHidden = true
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    private func build(_ size: CGSize) {
-        scrim.path = CGPath(rect: CGRect(origin: .zero, size: size), transform: nil)
-        scrim.fillColor = Palette.scrim.withAlphaComponent(0.82)
+    private func build() {
+        let scrim = SKShapeNode(rect: CGRect(origin: .zero, size: layout.size))
+        scrim.fillColor = Palette.scrim.withAlphaComponent(0.84)
         scrim.strokeColor = .clear
         addChild(scrim)
+        addChild(card)
 
-        let cy = size.height * 0.58
+        // One stack, top down, gaps from the scale.
+        var y = layout.size.height * 0.70
+        let x = layout.centreX
 
-        eyebrow.fontSize = 12
-        eyebrow.fontColor = .hex(0xFFB23F)
-        eyebrow.position = CGPoint(x: size.width / 2, y: cy + 96)
-        addChild(eyebrow)
+        eyebrow.position = CGPoint(x: x, y: y)
+        card.addChild(eyebrow)
+        y -= Layout.Space.xl + 18
 
-        title.fontSize = min(64, size.width * 0.17)
-        title.fontColor = .hex(0xEDE8DE)
-        title.position = CGPoint(x: size.width / 2, y: cy + 34)
-        addChild(title)
+        title.position = CGPoint(x: x, y: y)
+        card.addChild(title)
+        y -= Layout.Space.xl + Layout.Space.m
 
-        for (i, line) in blurb.enumerated() {
-            line.fontSize = 15
-            line.fontColor = .hex(0x9AA5B2)
-            line.position = CGPoint(x: size.width / 2, y: cy - 6 - CGFloat(i) * 23)
-            addChild(line)
+        for line in blurb {
+            line.position = CGPoint(x: x, y: y)
+            card.addChild(line)
+            y -= Layout.Space.xl
         }
+        y -= Layout.Space.l
 
-        scoreCaption.text = "SCORE"
-        bestCaption.text = "BEST FLOW"
-        for (caption, value, fx) in [(scoreCaption, scoreValue, 0.34), (bestCaption, bestValue, 0.66)] {
-            caption.fontSize = 9
-            caption.fontColor = .hex(0x66717F)
-            caption.position = CGPoint(x: size.width * fx, y: cy - 118)
-            addChild(caption)
-            value.fontSize = 28
-            value.fontColor = .hex(0xEDE8DE)
-            value.position = CGPoint(x: size.width * fx, y: cy - 106)
-            addChild(value)
+        // Two stats, on the same column grid the HUD uses — halves rather than
+        // arbitrary thirds, so they sit symmetrically about the centre.
+        statsRow.position = CGPoint(x: 0, y: y)
+        card.addChild(statsRow)
+        for (i, pair) in [("Score", scoreValue), ("Best flow", bestValue)].enumerated() {
+            let cx = layout.columnCentre(i, of: 2)
+            let caption = StyledLabel(.caption, Palette.hudCaption)
+            caption.text = pair.0
+            caption.position = CGPoint(x: cx, y: -Layout.Space.l)
+            statsRow.addChild(caption)
+            pair.1.position = CGPoint(x: cx, y: Layout.Space.s)
+            statsRow.addChild(pair.1)
         }
+        y -= Layout.Space.xxl + Layout.Space.l
 
-        let rect = CGRect(x: size.width / 2 - 96, y: cy - 200, width: 192, height: 54)
-        button = SKShapeNode(rect: rect, cornerRadius: 8)
+        // Full content width, same edges as the tray and the Return button, so
+        // every horizontal edge in the game agrees.
+        buttonRect = CGRect(x: layout.contentLeft, y: y - 56,
+                            width: layout.contentWidth, height: 56)
+        button = SKShapeNode(rect: buttonRect, cornerRadius: 14)
         button.fillColor = Palette.button
         button.strokeColor = .clear
-        addChild(button)
+        card.addChild(button)
 
-        buttonLabel.fontSize = 17
-        buttonLabel.fontColor = Palette.buttonText
-        buttonLabel.verticalAlignmentMode = .center
-        buttonLabel.position = CGPoint(x: rect.midX, y: rect.midY)
-        addChild(buttonLabel)
+        buttonLabel.position = CGPoint(x: buttonRect.midX, y: buttonRect.midY)
+        card.addChild(buttonLabel)
+
+        // How far the button rises when there are no stats to show, so the
+        // title card does not carry an empty gap where they would have been.
+        statsHeight = Layout.Space.xxl + Layout.Space.l
     }
+
+    private var statsHeight: CGFloat = 0
 
     // MARK: - Cards
 
     func showTitle() {
-        show(eyebrow: "ARRIVALS", title: "CAROUSEL",
-             lines: ["You can only grab bags in the lit zone in front of you.",
+        show(eyebrow: "Arrivals", title: "CAROUSEL",
+             lines: ["You can only grab bags in the lit zone.",
                      "Three matching bags send a traveler home.",
                      "Skip one and you wait a full lap for it."],
-             button: "START", stats: nil)
+             button: "Start", stats: nil)
     }
 
     func showWon(level: Int, score: Int, best: Int) {
-        show(eyebrow: "BELT CLEARED", title: "ALL CLAIMED",
-             lines: [String(format: "Belt %02d runs faster", level + 1), "and carries more.", ""],
-             button: "NEXT BELT", stats: (score, best))
+        show(eyebrow: "Belt cleared", title: "ALL CLAIMED",
+             lines: ["Belt \(String(format: "%02d", level + 1)) runs faster", "and carries more.", ""],
+             button: "Next belt", stats: (score, best))
     }
 
     func showLost(reason: GameState.LossReason, level: Int, score: Int, best: Int) {
         let copy: (String, String, [String]) = reason == .boarded
-            ? ("FLIGHT BOARDED", "TOO SLOW",
-               ["Waiting for the perfect bag costs a whole lap.", "Take the ones you can use.", ""])
-            : ("TRAY JAMMED", "NO ROOM",
-               ["Seven slots, no match.", "Be choosier about what you let in.", ""])
+            ? ("Flight boarded", "TOO SLOW",
+               ["Waiting for the perfect bag", "costs you a whole lap.", ""])
+            : ("Tray jammed", "NO ROOM",
+               ["Seven slots, no match.", "Be choosier about what you take.", ""])
         show(eyebrow: copy.0, title: copy.1, lines: copy.2,
-             button: String(format: "RETRY BELT %02d", level), stats: (score, best))
+             button: "Retry belt \(String(format: "%02d", level))", stats: (score, best))
     }
 
     private func show(eyebrow e: String, title t: String, lines: [String],
@@ -112,10 +131,22 @@ final class OverlayNode: SKNode {
         title.text = t
         for (i, line) in blurb.enumerated() { line.text = i < lines.count ? lines[i] : "" }
         buttonLabel.text = b
+        statsRow.isHidden = stats == nil
+        let lift = stats == nil ? statsHeight : 0
+        button.position.y = lift
+        buttonLabel.position.y = buttonRect.midY + lift
         scoreValue.text = "\(stats?.0 ?? 0)"
         bestValue.text = "×\(stats?.1 ?? 1)"
+
         isHidden = false
         isVisible = true
+
+        // A short settle on appear. Without it the card cuts in like a browser
+        // alert, which is most of what makes a game feel unfinished.
+        card.alpha = 0
+        card.setScale(0.96)
+        card.run(.group([.fadeIn(withDuration: 0.18),
+                         .scale(to: 1, duration: 0.22)]))
     }
 
     func hide() {
