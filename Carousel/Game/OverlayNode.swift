@@ -135,7 +135,7 @@ final class OverlayNode: SKNode {
         let lift = stats == nil ? statsHeight : 0
         button.position.y = lift
         buttonLabel.position.y = buttonRect.midY + lift
-        scoreValue.text = "\(stats?.0 ?? 0)"
+        scoreValue.text = Format.score(stats?.0 ?? 0)
         bestValue.text = "×\(stats?.1 ?? 1)"
 
         isHidden = false

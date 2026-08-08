@@ -23,6 +23,16 @@ final class GameScene: SKScene {
         addChild(world)
         rebuild(for: size)
         wireState()
+        // CAROUSEL_LEVEL=n drops straight into that belt, skipping the title.
+        // Needed to QA the later levels at all — oversized bags do not appear
+        // until belt three, and playing up to belt nine by hand every time is
+        // not a test, it is a chore nobody repeats.
+        if let raw = ProcessInfo.processInfo.environment["CAROUSEL_LEVEL"], let n = Int(raw) {
+            state.startLevel(max(1, n))
+            showDebugCard()
+            return
+        }
+
         // The belt idles behind the title card, so the first thing the player
         // sees is a machine already running.
         state.seedIdleBelt()
@@ -105,6 +115,9 @@ final class GameScene: SKScene {
                 Haptics.lost()
                 self.overlay.showLost(reason: self.state.lossReason, level: self.state.level,
                                       score: self.state.score, best: self.state.bestMultiplier)
+            case .playing:
+                self.overlay.hide()
+                self.announceLevel()
             default:
                 self.overlay.hide()
             }
@@ -178,8 +191,50 @@ final class GameScene: SKScene {
                        // Nearer draws on top. The constant lift keeps every bag
                        // in front of the belt it stands on, which sits just
                        // ahead of the wall plane.
-                       z: -depth + 1.0)
+                       z: -depth + 1.0,
+                       // A slight rock as it rides, phased off its own position
+                       // on the belt so neighbours are never in step. Nothing
+                       // standing on moving rubber sits perfectly still, and
+                       // perfectly still is what reads as a sprite.
+                       lean: sin(bag.s * 2.1 + clock * 1.6) * 0.025)
         }
+    }
+
+    /// CAROUSEL_CARD=won|jammed|boarded puts an end-of-level card straight on
+    /// screen. Those three are otherwise only reachable by playing a whole belt
+    /// out, which makes them the screens least likely to get looked at and the
+    /// most likely to be wrong.
+    private func showDebugCard() {
+        switch ProcessInfo.processInfo.environment["CAROUSEL_CARD"] {
+        case "won":
+            overlay.showWon(level: state.level, score: 4_820, best: 3)
+        case "jammed":
+            overlay.showLost(reason: .jammed, level: state.level, score: 1_150, best: 2)
+        case "boarded":
+            overlay.showLost(reason: .boarded, level: state.level, score: 960, best: 2)
+        default:
+            break
+        }
+    }
+
+    /// The belt number, once, in the middle of the screen. Two seconds of
+    /// knowing where you are, without a screen to tap through.
+    private func announceLevel() {
+        childNode(withName: "levelBanner")?.removeFromParent()
+        let banner = StyledLabel(.display, .white)
+        banner.name = "levelBanner"
+        banner.text = "Belt \(String(format: "%02d", state.level))"
+        banner.position = CGPoint(x: size.width / 2, y: size.height * 0.55)
+        banner.zPosition = 950
+        banner.alpha = 0
+        banner.setScale(0.86)
+        addChild(banner)
+        banner.run(.sequence([
+            .group([.fadeAlpha(to: 1, duration: 0.18), .scale(to: 1, duration: 0.22)]),
+            .wait(forDuration: 0.55),
+            .group([.fadeOut(withDuration: 0.3), .scale(to: 1.08, duration: 0.3)]),
+            .removeFromParent(),
+        ]))
     }
 
     /// A brief ghost of the bag, lifting and fading where it was taken.

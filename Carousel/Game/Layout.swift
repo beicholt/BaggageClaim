@@ -99,6 +99,20 @@ struct Layout {
     }
 }
 
+enum Format {
+    /// Grouped, in the player's own locale. A five figure score with no
+    /// separator is a number you have to count the digits of.
+    private static let grouped: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        return f
+    }()
+
+    static func score(_ n: Int) -> String {
+        grouped.string(from: NSNumber(value: n)) ?? "\(n)"
+    }
+}
+
 /// An SKLabelNode that knows its own style, so setting `string` cannot quietly
 /// drop the tracking or the monospaced digits.
 final class StyledLabel: SKLabelNode {

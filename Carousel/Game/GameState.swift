@@ -65,8 +65,9 @@ final class GameState {
         // impossible — you can hold two of each and still never fill seven
         // slots — so anything slower hands out unloseable levels.
         let typeCount = min(Bags.small.count, 2 + n)
-        var pool = Array(Bags.small.prefix(typeCount))
-        if n >= 3 { pool += Bags.big.prefix(min(Bags.big.count, n / 3)) }
+        let smallPool = Array(Bags.small.prefix(typeCount))
+        let bigPool = n >= 3 ? Array(Bags.big.prefix(min(Bags.big.count, n / 3))) : []
+        let pool = smallPool + bigPool
 
         speed = min(1.76, 0.77 + CGFloat(n) * 0.08)
 
@@ -80,8 +81,19 @@ final class GameState {
         // level two unloseable roughly a third of the time.
         var types: [Int] = []
         for triples in stride(from: min(11, 4 + n), through: 2, by: -1) {
-            var sets = pool.shuffled().prefix(triples).map { $0 }
+            var sets: [Int] = []
+
+            // Oversized first, and always at least one once they exist. They
+            // are the mechanic the level is *about* — a belt that quietly drew
+            // none of them is a belt teaching the wrong lesson. Capped at a
+            // quarter of the sets so the tray still mostly holds normal bags.
+            if !bigPool.isEmpty {
+                sets += bigPool.shuffled().prefix(max(1, min(bigPool.count, triples / 4)))
+            }
+            // Then cover every ordinary type before repeating any of them.
+            for t in smallPool.shuffled() where sets.count < triples { sets.append(t) }
             while sets.count < triples { sets.append(pool.randomElement()!) }
+
             types = sets.flatMap { [$0, $0, $0] }
             if fitsLegibly(types) { break }
         }
@@ -116,36 +128,71 @@ final class GameState {
 
     func advanceLevel() { startLevel(level + 1) }
 
+    /// How well a stretch of belt separates the bags standing on it.
+    ///
+    /// Bags are drawn facing the camera, but they are spaced along the belt.
+    /// Where the belt runs across the view they separate properly; where it
+    /// runs away from the camera — the two side runs — the same arclength
+    /// buys almost no horizontal separation and the bags pile into each other.
+    /// Spacing has to be bought in the local currency, or a late belt reads as
+    /// a heap however carefully the arclength was divided.
+    ///
+    /// The camera looks along world Z and never moves, so this needs only the
+    /// track: no projection, no view size, still testable headless.
+    private func spread(at s: CGFloat) -> CGFloat {
+        let e: CGFloat = 0.01
+        let p0 = track.point(at: s - e), p1 = track.point(at: s + e)
+        let tx = p1.x - p0.x, ty = p1.y - p0.y
+        let m = max(0.000_1, sqrt(tx * tx + ty * ty))
+        // Floored, or a run pointing straight at the camera would demand
+        // infinite belt and no level would ever fit.
+        return max(0.38, abs(tx / m))
+    }
+
+    /// Walk the loop laying bags down, each taking the arclength it needs where
+    /// it stands. Returns nil when the set will not fit legibly, which is the
+    /// caller's cue to shed a matched set rather than crowd the belt.
+    private func layOut(_ types: [Int], slack: CGFloat) -> [Bag]? {
+        var cursor: CGFloat = 0
+        var placed: [Bag] = []
+        placed.reserveCapacity(types.count)
+
+        for type in types {
+            let w = Tune.baseTile * Bags.widthFactor(type)
+            let s = track.wrap(cursor + w / 2)
+            placed.append(Bag(type: type, s: s))
+            cursor += (w + Tune.bagPad + slack) / spread(at: s)
+            if cursor > track.total { return nil }
+        }
+        return placed
+    }
+
     private func fitsLegibly(_ types: [Int]) -> Bool {
-        let factor = types.reduce(CGFloat(0)) { $0 + Bags.widthFactor($1) }
-        return factor * Tune.minTile + CGFloat(types.count) * Tune.bagPad <= track.total
+        layOut(types, slack: 0) != nil
     }
 
-    private func refitTiles() {
-        let room = track.total - CGFloat(fitCount) * Tune.bagPad
-        tile = max(Tune.hardMinTile, min(Tune.baseTile, room / fitFactor))
-    }
-
-    /// Lay bags around the loop back to back, then spend the leftover belt as
-    /// random extra spacing. Irregular like a real carousel, never overlapping —
+    /// Lay the bags out, then spend whatever belt is left over as extra breathing
+    /// room spread evenly. Irregular like a real carousel, never overlapping —
     /// a bag the player can see must be a bag the player can hit.
     private func placeBags(_ types: [Int]) -> [Bag] {
         fitCount = types.count
         fitFactor = types.reduce(CGFloat(0)) { $0 + Bags.widthFactor($1) }
-        refitTiles()
+        tile = Tune.baseTile
 
-        let used = types.reduce(CGFloat(0)) { $0 + tile * Bags.widthFactor($1) + Tune.bagPad }
-        let slack = max(0, track.total - used)
-        let share = types.map { _ in CGFloat.random(in: 0...1) }
-        let shareTotal = max(0.000_1, share.reduce(0, +))
-
-        var cursor: CGFloat = 0
-        return types.enumerated().map { i, type in
-            let w = tile * Bags.widthFactor(type)
-            let s = track.wrap(cursor + w / 2)
-            cursor += w + Tune.bagPad + (slack * share[i]) / shareTotal
-            return Bag(type: type, s: s)
+        // Binary search the extra gap the loop can afford, so a light belt
+        // spreads out rather than bunching at the top and leaving a bald patch.
+        var low: CGFloat = 0, high: CGFloat = track.total / max(1, CGFloat(types.count))
+        var best = layOut(types, slack: 0) ?? []
+        for _ in 0..<12 {
+            let mid = (low + high) / 2
+            if let laid = layOut(types, slack: mid) {
+                best = laid
+                low = mid
+            } else {
+                high = mid
+            }
         }
+        return best
     }
 
     // MARK: - Player actions

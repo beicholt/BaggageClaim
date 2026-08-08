@@ -31,7 +31,7 @@ final class BagNode: SKNode {
     var snapshot: (texture: SKTexture?, size: CGSize) { (sprite.texture, sprite.size) }
 
     func apply(art: String, at point: CGPoint, width: CGFloat, height: CGFloat,
-               dimmed: Bool, z: CGFloat) {
+               dimmed: Bool, z: CGFloat, lean: CGFloat = 0) {
         if art != self.art {
             self.art = art
             sprite.texture = Art.texture(art)
@@ -39,6 +39,7 @@ final class BagNode: SKNode {
         position = point
         zPosition = z
         sprite.size = CGSize(width: width, height: height)
+        sprite.zRotation = lean
         // Out of reach reads as dimmed. It is the cheapest way to say "you can
         // see it, you cannot have it yet" without adding any UI.
         sprite.color = .hex(0xADB8C4)

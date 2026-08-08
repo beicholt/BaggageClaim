@@ -126,7 +126,7 @@ final class HUDNode: SKNode {
             shownScore += max(1, abs(gap) / 6) * (gap > 0 ? 1 : -1)
             if abs(state.score - shownScore) < 2 { shownScore = state.score }
         }
-        score.text = "\(shownScore)"
+        score.text = Format.score(shownScore)
 
         returnCount.text = "\(state.returnsLeft)"
         let on = state.canReturn

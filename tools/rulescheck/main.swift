@@ -68,27 +68,44 @@ do {
     check("level 2 reaches four types", Set(g.bags.map(\.type)).count >= 4)
 }
 
-// Every bag is placed with clear belt around it: a bag you can see is a bag
-// you can hit.
+// A bag you can see must be a bag you can hit — so no two bags may overlap
+// *on screen*, which is not the same as not overlapping along the belt. Where
+// the belt runs away from the camera, generous arclength buys almost no
+// separation, and this is the check that catches it.
 do {
+    let proj = Projection(size: CGSize(width: 402, height: 874))
     let g = GameState()
-    for level in 1...12 {
+    var worstOverlap: CGFloat = 0
+    var worstLevel = 0
+
+    for level in 1...20 {
         g.startLevel(level)
-        let sorted = g.bags.map(\.s).sorted()
-        var minGap = CGFloat.greatestFiniteMagnitude
-        for i in sorted.indices {
-            let a = sorted[i]
-            let b = i + 1 < sorted.count ? sorted[i + 1] : sorted[0] + g.track.total
-            minGap = min(minGap, b - a)
+
+        // Screen rect of every bag the player can actually see.
+        var boxes: [CGRect] = []
+        for bag in g.bags where !g.track.inHall(bag.s) {
+            let base = g.track.world(at: bag.s)
+            let scale = proj.scale(atDepth: proj.depth(of: base))
+            let w = g.tile * Bags.widthFactor(bag.type) * scale
+            let h = w / (Bags[bag.type].size == 2 ? 2.4 : 0.6)
+            let p = proj.project(base)
+            boxes.append(CGRect(x: p.x - w / 2, y: p.y, width: w, height: h))
         }
-        // Neighbouring centres must clear half of each bag plus the padding.
-        let worst = g.tile * Tune.bigWidth
-        if minGap < worst * 0.5 {
-            check("level \(level) places bags without overlap", false)
-            break
+
+        for i in boxes.indices {
+            for j in (i + 1)..<boxes.count {
+                let hit = boxes[i].intersection(boxes[j])
+                guard !hit.isNull else { continue }
+                let share = (hit.width * hit.height)
+                    / min(boxes[i].width * boxes[i].height, boxes[j].width * boxes[j].height)
+                if share > worstOverlap { worstOverlap = share; worstLevel = level }
+            }
         }
-        if level == 12 { check("levels 1-12 place bags without overlap", true) }
     }
+    // Some overlap between a near bag and a far one is honest perspective. A
+    // third of a bag hidden is not.
+    check("levels 1-20 keep bags legible (worst \(Int(worstOverlap * 100))% on belt \(worstLevel))",
+          worstOverlap < 0.34)
 }
 
 // Returning a bag puts it back on the belt and costs a charge.
