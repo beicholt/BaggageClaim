@@ -17,6 +17,8 @@ final class TrayNode: SKNode {
 
     private var sprites: [SKSpriteNode] = []
     private var wells: [SKShapeNode] = []
+    private var plate: SKShapeNode!
+    private var crowded = false
 
     init(layout: Layout) {
         super.init()
@@ -29,9 +31,9 @@ final class TrayNode: SKNode {
         let plateHeight: CGFloat = 82
         // Sits directly above the Return button, one step of the scale away.
         let plateY = layout.content.minY + 48 + Layout.Space.m
-        let plate = SKShapeNode(rect: CGRect(x: layout.contentLeft, y: plateY,
-                                             width: layout.contentWidth, height: plateHeight),
-                                cornerRadius: 14)
+        plate = SKShapeNode(rect: CGRect(x: layout.contentLeft, y: plateY,
+                                        width: layout.contentWidth, height: plateHeight),
+                            cornerRadius: 14)
         plate.fillColor = Palette.trayPlate
         plate.strokeColor = Palette.trayEdge
         plate.lineWidth = 1
@@ -66,6 +68,15 @@ final class TrayNode: SKNode {
     }
 
     func sync(state: GameState) {
+        // One slot left is the moment before a jam, and the loss screen should
+        // never be the first time the player hears about it.
+        let tight = state.unitsUsed >= Tune.trayCapacity - 1 && state.phase == .playing
+        if tight != crowded {
+            crowded = tight
+            plate.strokeColor = tight ? Palette.hudLow : Palette.trayEdge
+            plate.lineWidth = tight ? 2 : 1
+        }
+
         while sprites.count < state.tray.count {
             let s = SKSpriteNode()
             s.zPosition = 10

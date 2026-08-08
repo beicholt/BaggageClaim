@@ -271,6 +271,9 @@ final class HallNode: SKNode {
         let gate = SKShapeNode(path: ribbonPath(from: mid - half, span: half * 2,
                                                 offsetA: inner, heightA: Tune.beltY + 0.004,
                                                 offsetB: outer, heightB: Tune.beltY + 0.004))
+        // Fill set once. Changing an SKShapeNode's fillColor re-rasterises the
+        // whole path, and this one is a 40-segment ribbon being asked to change
+        // sixty times a second — the pulse rides on node alpha instead.
         gate.fillColor = Palette.gate.withAlphaComponent(0.30)
         gate.strokeColor = Palette.gateEdge
         gate.lineWidth = 2.5
@@ -363,7 +366,6 @@ final class HallNode: SKNode {
     func update(gateFlash: CGFloat, clock: CGFloat) {
         // A slow breath so the zone reads as lit rather than painted, and a
         // hard brighten when the player reaches for a bag they cannot have.
-        let base = 0.30 + sin(clock * 2.2) * 0.03
-        gateNode?.fillColor = Palette.gate.withAlphaComponent(base + gateFlash * 0.45)
+        gateNode?.alpha = 1 + sin(clock * 2.2) * 0.10 + gateFlash * 1.5
     }
 }

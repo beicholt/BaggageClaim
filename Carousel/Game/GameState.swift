@@ -64,12 +64,20 @@ final class GameState {
         // Reach four types by level two. Below four a jam is arithmetically
         // impossible — you can hold two of each and still never fill seven
         // slots — so anything slower hands out unloseable levels.
-        let typeCount = min(Bags.small.count, 2 + n)
+        // Belt one teaches. One type, a short belt, moving slowly: the only lit
+        // thing on screen is the claim zone, so that is where the player looks,
+        // and every bag there is the right bag. They learn tap, tray, pop, and
+        // that a bag they miss comes back — without a word of tutorial.
+        //
+        // It is deliberately unloseable. Four types is the first count at which
+        // a jam is arithmetically possible, and belt two is where that starts.
+        let teaching = n == 1
+        let typeCount = teaching ? 1 : min(Bags.small.count, 2 + n)
         let smallPool = Array(Bags.small.prefix(typeCount))
         let bigPool = n >= 3 ? Array(Bags.big.prefix(min(Bags.big.count, n / 3))) : []
         let pool = smallPool + bigPool
 
-        speed = min(1.76, 0.77 + CGFloat(n) * 0.08)
+        speed = teaching ? 0.60 : min(1.76, 0.77 + CGFloat(n) * 0.08)
 
         // Draw the level, then drop a matched set at a time until the belt can
         // carry it at a readable size.
@@ -80,7 +88,7 @@ final class GameState {
         // — you can hold two of each and never fill seven slots. That made
         // level two unloseable roughly a third of the time.
         var types: [Int] = []
-        for triples in stride(from: min(11, 4 + n), through: 2, by: -1) {
+        for triples in stride(from: teaching ? 3 : min(11, 4 + n), through: teaching ? 3 : 2, by: -1) {
             var sets: [Int] = []
 
             // Oversized first, and always at least one once they exist. They

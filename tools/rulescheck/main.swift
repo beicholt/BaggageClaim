@@ -60,12 +60,20 @@ do {
     check("tray never exceeds capacity", g.unitsUsed <= Tune.trayCapacity)
 }
 
-// Below four types a jam is arithmetically impossible, so early levels must
-// reach four or they hand out levels that cannot be lost.
+// Belt one teaches: one type, so every bag in the zone is the right bag.
+do {
+    let g = GameState()
+    g.startLevel(1)
+    check("belt 1 uses a single type", Set(g.bags.map(\.type)).count == 1)
+    check("belt 1 is short", g.bags.count <= 9)
+}
+
+// Below four types a jam is arithmetically impossible, so belt two is the
+// earliest a level can be lost at all — and it has to actually get there.
 do {
     let g = GameState()
     g.startLevel(2)
-    check("level 2 reaches four types", Set(g.bags.map(\.type)).count >= 4)
+    check("belt 2 reaches four types", Set(g.bags.map(\.type)).count >= 4)
 }
 
 // A bag you can see must be a bag you can hit — so no two bags may overlap

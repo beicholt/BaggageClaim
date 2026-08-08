@@ -12,8 +12,12 @@ final class GameViewController: UIViewController {
         skView = SKView(frame: view.bounds)
         skView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         skView.ignoresSiblingOrder = false      // the belt depends on zPosition order
-        skView.showsFPS = false
-        skView.showsNodeCount = false
+        // CAROUSEL_STATS=1 turns on the frame counter. Off by default so a
+        // release build cannot ship with a debug overlay on it.
+        let stats = ProcessInfo.processInfo.environment["CAROUSEL_STATS"] == "1"
+        skView.showsFPS = stats
+        skView.showsNodeCount = stats
+        skView.showsDrawCount = stats
         view.addSubview(skView)
     }
 
