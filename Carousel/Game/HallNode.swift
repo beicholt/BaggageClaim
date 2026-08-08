@@ -125,6 +125,49 @@ final class HallNode: SKNode {
         skirting.strokeColor = .clear
         skirting.zPosition = wall.zPosition + 0.1
         addChild(skirting)
+
+        buildFloorTiles()
+    }
+
+    /// Joints in the terminal floor, projected rather than drawn flat.
+    ///
+    /// The lower third of the screen is floor and nothing else. Left plain it
+    /// is a grey field that quietly tells the player the room is a backdrop; a
+    /// grid that converges correctly tells them it is a room they are standing
+    /// in. Costs two dozen lines and no per-frame work.
+    private func buildFloorTiles() {
+        let joints = CGMutablePath()
+        let reach: CGFloat = 15
+        let step: CGFloat = 2.4
+
+        var x = -reach
+        while x <= reach {
+            joints.move(to: proj.project(x: x, y: 0, z: Tune.wallZ))
+            joints.addLine(to: proj.project(x: x, y: 0, z: reach))
+            x += step
+        }
+        var z = Tune.wallZ
+        while z <= reach {
+            joints.move(to: proj.project(x: -reach, y: 0, z: z))
+            joints.addLine(to: proj.project(x: reach, y: 0, z: z))
+            z += step
+        }
+
+        let grid = SKShapeNode(path: joints)
+        grid.strokeColor = Palette.skirting.withAlphaComponent(0.30)
+        grid.lineWidth = 1
+        grid.zPosition = -790
+        addChild(grid)
+    }
+
+    /// The painted keep-back line every baggage hall has around the drum.
+    private func buildHazardRing() {
+        let ring = SKShapeNode(path: loopPath(offset: Tune.beltWidth / 2 + 0.95, height: 0.002))
+        ring.strokeColor = .hex(0xE8B33A, alpha: 0.55)
+        ring.lineWidth = 3
+        ring.fillColor = .clear
+        ring.zPosition = -wallDepth - 58
+        addChild(ring)
     }
 
     /// Depth of the wall plane at belt height. Everything sorts against this:
@@ -198,6 +241,8 @@ final class HallNode: SKNode {
                       offsetB: inner, heightB: Tune.beltY,
                       color: Palette.slope, z: z + 0.03)
         }
+
+        buildHazardRing()
 
         let pool = SKShapeNode(path: loopPath(offset: outer + 1.15, height: 0.001))
         pool.fillColor = Palette.floorFar.withAlphaComponent(0.75)

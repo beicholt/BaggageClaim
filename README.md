@@ -32,11 +32,18 @@ without a screen:
 tools/rules_check.sh             # runs the rules headless on the simulator
 ```
 
-`CAROUSEL_FREEZE=1` stops the belt and the clock, so a build can be driven from a
-script and the same bag is still under the same pixel a moment later:
+Three environment switches exist purely so the game can be QA'd without playing
+it to the point in question:
+
+| | |
+|---|---|
+| `CAROUSEL_FREEZE=1` | Stops the belt and the clock, so the same bag is still under the same pixel a moment later. |
+| `CAROUSEL_LEVEL=n` | Drops straight into belt *n*. Oversized bags do not appear until belt three. |
+| `CAROUSEL_CARD=won\|jammed\|boarded` | Puts an end-of-level card on screen. Otherwise reachable only by playing a whole belt out. |
 
 ```sh
-SIMCTL_CHILD_CAROUSEL_FREEZE=1 xcrun simctl launch booted com.beicholtz.carousel
+SIMCTL_CHILD_CAROUSEL_FREEZE=1 SIMCTL_CHILD_CAROUSEL_LEVEL=9 \
+  xcrun simctl launch booted com.beicholtz.carousel
 ```
 
 ## Art

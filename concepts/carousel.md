@@ -104,6 +104,19 @@ bags of each type before the third pops, so with `T` types in play the most you
 can ever hold is `2T` slots. With a seven-slot tray and three types that is
 six — the level is unloseable in any order. Reach four types by level two.
 
+### What legibility costs, and where difficulty has to come from
+
+Bags are drawn facing the camera but spaced along the belt, so the two side
+runs — where the belt travels away from you — buy almost no separation per unit
+of belt. Spacing is now paid in that local currency, which means **a belt holds
+noticeably fewer bags than the arclength suggests**, and later belts hold fewer
+than the first version of this doc assumed.
+
+That is the right trade, and it moves where difficulty comes from. It cannot
+come from crowding the belt. It has to come from the claim zone, the clock, and
+the number of *types* in play — which was already the argument: bag count and
+speed change the texture, the zone and the clock change the decision.
+
 ### One rule governs all content
 
 **A bag the player can see must be a bag the player can hit.** Difficulty comes
